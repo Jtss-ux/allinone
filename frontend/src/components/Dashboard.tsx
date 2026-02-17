@@ -1,0 +1,197 @@
+'use client';
+
+import React from 'react';
+import ImageGenerator from './tools/ImageGenerator';
+import VideoGenerator from './tools/VideoGenerator';
+import AudioGenerator from './tools/AudioGenerator';
+import ImageEditor from './tools/ImageEditor';
+import ImageUpscaler from './tools/ImageUpscaler';
+import ImageExtender from './tools/ImageExtender';
+import BackgroundRemover from './tools/BackgroundRemover';
+import SkinEnhancer from './tools/SkinEnhancer';
+import SketchToImage from './tools/SketchToImage';
+import IconGenerator from './tools/IconGenerator';
+import SoundEffects from './tools/SoundEffects';
+import MusicGenerator from './tools/MusicGenerator';
+import DesignEditor from './tools/DesignEditor';
+import ChangeCamera from './tools/ChangeCamera';
+import MockupGenerator from './tools/MockupGenerator';
+import SystemStatus from './tools/SystemStatus';
+import Spaces from './tools/Spaces';
+import VideoEditor from './tools/VideoEditor';
+import ClipEditor from './tools/ClipEditor';
+import VideoUpscaler from './tools/VideoUpscaler';
+import LipSync from './tools/LipSync';
+import DefaultTool from './tools/DefaultTool';
+import AIToolsHub from './tools/AIToolsHub';
+import PhotoEffects from './tools/PhotoEffects';
+import PhotoEditor from './tools/PhotoEditor';
+import MemeGenerator from './tools/MemeGenerator';
+import IPTVPlayer from './tools/IPTVPlayer';
+import ImageTool from './tools/ImageTool';
+import FileConverter from './tools/FileConverter';
+import TextToHandwriting from './tools/TextToHandwriting';
+import QRCodeGenerator from './tools/QRCodeGenerator';
+import DeveloperTools from './tools/DeveloperTools';
+import Calculator from './tools/Calculator';
+import UnitConverter from './tools/UnitConverter';
+import ColorTools from './tools/ColorTools';
+import PomodoroTimer from './tools/PomodoroTimer';
+import PDFTools from './tools/PDFTools';
+import ScreenRecorder from './tools/ScreenRecorder';
+import Whiteboard from './tools/Whiteboard';
+import WorldClock from './tools/WorldClock';
+import GamesHub from './tools/GamesHub';
+import SnakeGame from './tools/games/SnakeGame';
+import TetrisGame from './tools/games/TetrisGame';
+import ChessGame from './tools/games/ChessGame';
+import JarvisAI from './tools/JarvisAI';
+import Game2048 from './tools/Game2048';
+import Notes from './tools/Notes';
+import Calendar from './tools/Calendar';
+import PasswordGenerator from './tools/PasswordGenerator';
+import LoremIpsumGenerator from './tools/LoremIpsumGenerator';
+import RegexTester from './tools/RegexTester';
+
+interface DashboardProps {
+  section: string;
+  backendStatus: boolean;
+}
+
+export default function Dashboard({ section, backendStatus }: DashboardProps) {
+  const renderTool = () => {
+    switch (section) {
+      // Main Hub
+      case 'ai-tools-hub':
+        return <AIToolsHub />;
+      case 'photo-effects':
+        return <PhotoEffects />;
+      case 'photo-editor':
+        return <PhotoEditor />;
+      case 'meme-generator':
+        return <MemeGenerator />;
+      case 'iptv-player':
+        return <IPTVPlayer />;
+      case 'image-tool':
+        return <ImageTool />;
+      case 'file-converter':
+        return <FileConverter />;
+      case 'text-handwriting':
+        return <TextToHandwriting />;
+      case 'qr-code':
+        return <QRCodeGenerator />;
+      case 'developer-tools':
+        return <DeveloperTools />;
+      case 'calculator':
+        return <Calculator />;
+      case 'unit-converter':
+        return <UnitConverter />;
+      case 'color-tools':
+        return <ColorTools />;
+      case 'pomodoro':
+        return <PomodoroTimer />;
+      case 'pdf-tools':
+        return <PDFTools />;
+      case 'screen-recorder':
+        return <ScreenRecorder />;
+      case 'whiteboard':
+        return <Whiteboard />;
+      case 'world-clock':
+        return <WorldClock />;
+      case 'games-hub':
+        return <GamesHub />;
+      case 'snake':
+        return <SnakeGame />;
+      case 'tetris':
+        return <TetrisGame />;
+      case 'chess':
+        return <ChessGame />;
+      case 'jarvis':
+        return <JarvisAI />;
+      case 'game-2048':
+        return <Game2048 />;
+      case 'notes':
+        return <Notes />;
+      case 'calendar':
+        return <Calendar />;
+      case 'password-generator':
+        return <PasswordGenerator />;
+      case 'lorem-ipsum':
+        return <LoremIpsumGenerator />;
+      case 'regex-tester':
+        return <RegexTester />;
+
+      // Image tools
+      case 'image-generator':
+        return <ImageGenerator />;
+      case 'image-editor':
+        return <ImageEditor />;
+      case 'image-upscaler':
+        return <ImageUpscaler />;
+      case 'image-extender':
+        return <ImageExtender />;
+      case 'bg-remover':
+        return <BackgroundRemover />;
+      case 'skin-enhancer':
+        return <SkinEnhancer />;
+      case 'sketch-to-image':
+        return <SketchToImage />;
+      case 'icon-generator':
+        return <IconGenerator />;
+      case 'variations':
+        return <ImageEditor />;
+      
+      // Video tools
+      case 'video-generator':
+        return <VideoGenerator />;
+      case 'video-editor':
+        return <VideoEditor />;
+      case 'clip-editor':
+        return <ClipEditor />;
+      case 'video-upscaler':
+        return <VideoUpscaler />;
+      case 'lip-sync':
+        return <LipSync />;
+      
+      // Audio tools
+      case 'voice-generator':
+        return <AudioGenerator />;
+      case 'sound-effects':
+        return <SoundEffects />;
+      case 'music-generator':
+        return <MusicGenerator />;
+      
+      // Other tools
+      case 'spaces':
+        return <Spaces />;
+      case 'design-editor':
+        return <DesignEditor />;
+      case 'mockup-generator':
+        return <MockupGenerator />;
+      case 'change-camera':
+        return <ChangeCamera />;
+      case 'system-status':
+        return <SystemStatus />;
+      
+      default:
+        return <DefaultTool toolName={section} />;
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <div className="bg-gray-950 border-b border-gray-800 p-6">
+        <h2 className="text-3xl font-bold text-white capitalize">{section.replace(/-/g, ' ')}</h2>
+        <p className="text-gray-400 mt-1">
+          {backendStatus ? '✅ Backend Connected' : '❌ Backend Disconnected'}
+        </p>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-8">
+        {renderTool()}
+      </div>
+    </div>
+  );
+}
