@@ -72,7 +72,6 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
       category: 'PRODUCTIVITY',
       tools: [
         { id: 'pdf-tools', label: 'PDF Tools 📄', icon: '📄' },
-        { id: 'screen-recorder', label: 'Screen Recorder 🎥', icon: '🎥' },
         { id: 'whiteboard', label: 'Whiteboard 🎨', icon: '🎨' },
         { id: 'pomodoro', label: 'Pomodoro Timer ⏱️', icon: '⏱️' },
         { id: 'world-clock', label: 'World Clock 🌍', icon: '🌍' },

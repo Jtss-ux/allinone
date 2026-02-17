@@ -38,7 +38,6 @@ import UnitConverter from './tools/UnitConverter';
 import ColorTools from './tools/ColorTools';
 import PomodoroTimer from './tools/PomodoroTimer';
 import PDFTools from './tools/PDFTools';
-import ScreenRecorder from './tools/ScreenRecorder';
 import Whiteboard from './tools/Whiteboard';
 import WorldClock from './tools/WorldClock';
 import GamesHub from './tools/GamesHub';
@@ -92,8 +91,6 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <PomodoroTimer />;
       case 'pdf-tools':
         return <PDFTools />;
-      case 'screen-recorder':
-        return <ScreenRecorder />;
       case 'whiteboard':
         return <Whiteboard />;
       case 'world-clock':
