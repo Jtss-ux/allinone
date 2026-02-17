@@ -19,7 +19,9 @@ export default function SystemStatus() {
 
   const checkWebGPU = async () => {
     try {
+      // @ts-ignore - WebGPU API not fully typed in standard TypeScript
       if (navigator.gpu) {
+        // @ts-ignore
         const adapter = await navigator.gpu.requestAdapter();
         if (adapter) {
           setWebgpuStatus('available');
