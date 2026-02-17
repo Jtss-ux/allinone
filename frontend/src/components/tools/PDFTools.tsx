@@ -36,7 +36,8 @@ export default function PDFTools() {
       }
 
       const mergedPdfBytes = await mergedPdf.save();
-      const blob = new Blob([mergedPdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+      // @ts-ignore - pdf-lib returns Uint8Array which is compatible with Blob
+      const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setResult(url);
     } catch (error) {
@@ -67,8 +68,8 @@ export default function PDFTools() {
         const [copiedPage] = await newPdf.copyPages(pdf, [i]);
         newPdf.addPage(copiedPage);
         const pdfBytes = await newPdf.save();
-        // Cast to BlobPart to satisfy TS Blob input types across environments
-        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+        // @ts-ignore - pdf-lib returns Uint8Array which is compatible with Blob
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         splitPdfs.push(URL.createObjectURL(blob));
       }
       
@@ -96,8 +97,8 @@ export default function PDFTools() {
         useObjectStreams: true,
         addDefaultPage: false,
       });
-      
-      const blob = new Blob([compressedBytes as unknown as BlobPart], { type: 'application/pdf' });
+      // @ts-ignore - pdf-lib returns Uint8Array which is compatible with Blob
+      const blob = new Blob([compressedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setResult(url);
     } catch (error) {
