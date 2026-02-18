@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',') 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://allinone-opal.vercel.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -44,6 +44,22 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Routes
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'AI Content Studio Backend API',
+    status: 'Running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      imageGenerate: '/api/image/generate',
+      videoGenerate: '/api/video/generate',
+      audioGenerate: '/api/audio/generate',
+      upload: '/api/upload'
+    }
+  });
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
