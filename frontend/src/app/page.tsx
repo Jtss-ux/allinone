@@ -10,13 +10,34 @@ export default function Home() {
   const [currentSection, setCurrentSection] = useState('image-generator');
   const [backendStatus, setBackendStatus] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [debugUrl, setDebugUrl] = useState('');
 
   useEffect(() => {
     // Check if backend is running using environment variable
-    const backendUrl = API_CONFIG.BACKEND_URL;
-    axios.get(`${backendUrl}/api/health`, { timeout: 5000 })
-      .then(() => setBackendStatus(true))
-      .catch(() => setBackendStatus(false));
+    const checkBackend = async () => {
+      try {
+        // Use environment variable directly
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        setDebugUrl(backendUrl); // For debugging
+        const response = await axios.get(`${backendUrl}/api/health`, { 
+          timeout: 10000,
+          withCredentials: false 
+        });
+        if (response.status === 200) {
+          setBackendStatus(true);
+        }
+      } catch (error) {
+        console.log('Backend connection failed:', error);
+        setBackendStatus(false);
+      }
+    };
+    
+    // Initial check
+    checkBackend();
+    
+    // Check again after a short delay
+    const timer = setTimeout(checkBackend, 2000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Close sidebar when clicking outside on mobile
@@ -81,6 +102,12 @@ export default function Home() {
               ● {backendStatus ? 'Running' : 'Disconnected'}
             </span>
           </div>
+          {/* Debug: Show which URL is being used */}
+          {debugUrl && (
+            <div className="px-3 py-1 bg-gray-900 rounded text-xs text-gray-500">
+              API: {debugUrl}
+            </div>
+          )}
         </div>
         
         {/* Dashboard - Scrollable */}
