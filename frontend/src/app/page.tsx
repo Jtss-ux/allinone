@@ -70,7 +70,7 @@ export default function Home() {
         fixed lg:static inset-y-0 left-0 z-50 
         transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
         lg:transform-none transition-transform duration-300
-        w-64 h-full
+        w-64 h-screen overflow-y-auto
       `}>
         <Sidebar currentSection={currentSection} onSectionChange={(section) => {
           setCurrentSection(section);
@@ -78,7 +78,7 @@ export default function Home() {
         }} />
       </div>
       
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto">
         <div className="lg:hidden flex items-center justify-between p-4 bg-gray-950 border-b border-gray-800">
           <button 
             onClick={() => setSidebarOpen(true)}
