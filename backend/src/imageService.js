@@ -139,36 +139,54 @@ const generateImage = async (prompt, opts = {}) => {
 
   const providers = [];
 
-  providers.push(() => generateWithPollinations({
-    encodedPrompt: encodeURIComponent(prompt),
-    width: opts.width || 1024,
-    height: opts.height || 1024,
-    seed: opts.seed || Math.floor(Math.random() * 1000000)
-  }));
+  providers.push({
+    name: 'pollinations',
+    func: () => generateWithPollinations({
+      encodedPrompt: encodeURIComponent(prompt),
+      width: opts.width || 1024,
+      height: opts.height || 1024,
+      seed: opts.seed || Math.floor(Math.random() * 1000000)
+    })
+  });
 
-  providers.push(() => generateWithCraiyon(prompt));
+  providers.push({
+    name: 'craiyon',
+    func: () => generateWithCraiyon(prompt)
+  });
 
   if (process.env.OPENAI_API_KEY) {
-    providers.push(() => generateWithOpenAI(prompt, opts.steps));
+    providers.push({
+      name: 'openai',
+      func: () => generateWithOpenAI(prompt, opts.steps)
+    });
   }
 
   if (process.env.HUGGING_FACE_API_KEY) {
-    providers.push(() => generateWithHuggingFace(prompt));
+    providers.push({
+      name: 'huggingface',
+      func: () => generateWithHuggingFace(prompt)
+    });
   }
 
   if (process.env.DEEPAI_API_KEY) {
-    providers.push(() => generateWithDeepAI(prompt));
+    providers.push({
+      name: 'deepai',
+      func: () => generateWithDeepAI(prompt)
+    });
   }
 
   if (process.env.CLIPDROP_API_KEY) {
-    providers.push(() => generateWithClipdrop(prompt));
+    providers.push({
+      name: 'clipdrop',
+      func: () => generateWithClipdrop(prompt)
+    });
   }
 
   const errors = [];
 
-  for (const provider of providers) {
+  for (const p of providers) {
     try {
-      const result = await provider();
+      const result = await p.func();
       const latency = Date.now() - start;
       return {
         imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
@@ -177,7 +195,7 @@ const generateImage = async (prompt, opts = {}) => {
         prompt
       };
     } catch (error) {
-      errors.push(`${result.source || 'Unknown'}: ${error.message}`);
+      errors.push(`${p.name}: ${error.message}`);
     }
   }
 
