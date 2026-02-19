@@ -1,5 +1,4 @@
-Here is a clean, optimized README.md tailored for the AMD judges. I have removed the "NVIDIA" reference and replaced it with AMD-specific hardware, ensured the "Powered by AMD" section is prominent, and removed all hyphens (-) as requested, replacing them with bullet points or alternative punctuation.
-🎬 AI Content Studio
+AI Content Studio
 🚀 A Complete Production Ready AI Content Generation Platform
 
 Generate stunning images, videos, and audio using the latest open source AI models. No API keys required, everything runs locally on your machine.
