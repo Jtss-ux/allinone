@@ -6,7 +6,6 @@ const keepAliveAgent = new https.Agent({ keepAlive: true });
 
 const axiosClient = axios.create({
   timeout: 45000,
-  httpsAgent: keepAliveAgent,
   validateStatus: () => true,
 });
 
@@ -128,7 +127,7 @@ const generateWithClipdrop = async (prompt) => {
   }
 
   const response = await axiosClient.post('https://clipdrop-api.co/text-to-image/v1', { prompt }, {
-    headers: { 'x-api-key': process.env.CLIPDROP_API_KEY },
+    headers: { 'x-Api-Key': process.env.CLIPDROP_API_KEY },
     responseType: 'arraybuffer'
   });
 
@@ -141,7 +140,7 @@ const generateWithReplicate = async (prompt) => {
   }
 
   const response = await axiosClient.post('https://api.replicate.com/v1/predictions', {
-    version: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+    version: 'stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf',
     input: { prompt }
   }, {
     headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`, 'Content-Type': 'application/json' }
