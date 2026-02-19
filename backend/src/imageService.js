@@ -81,8 +81,8 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   const hfModels = [
-    'runwayml/stable-diffusion-v1-5',
-    'stabilityai/stable-diffusion-xl-base-1.0',
+    'CompVis/stable-diffusion-v1-4',
+    'stabilityai/stable-diffusion-2-1',
   ];
 
   const errors = [];
@@ -147,34 +147,39 @@ const generateImage = async (prompt, opts = {}) => {
 
   const providers = [];
 
-  if (process.env.OPENAI_API_KEY) {
-    providers.push(generateWithOpenAI(prompt, opts.steps));
-  }
-
-  providers.push(generateWithPollinations({
+  providers.push(() => generateWithPollinations({
     encodedPrompt: encodeURIComponent(prompt),
     width: opts.width || 1024,
     height: opts.height || 1024,
     seed: opts.seed || Math.floor(Math.random() * 1000000)
   }));
 
+  if (process.env.OPENAI_API_KEY) {
+    providers.push(() => generateWithOpenAI(prompt, opts.steps));
+  }
+
   if (process.env.HUGGING_FACE_API_KEY) {
-    providers.push(generateWithHuggingFace(prompt));
+    providers.push(() => generateWithHuggingFace(prompt));
   }
 
-  try {
-    const result = await Promise.race(providers);
-    const latency = Date.now() - start;
+  const errors = [];
 
-    return {
-      imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
-      provider: result.source,
-      latency,
-      prompt
-    };
-  } catch (error) {
-    throw new Error(`All providers failed: ${error.message}`);
+  for (const provider of providers) {
+    try {
+      const result = await provider();
+      const latency = Date.now() - start;
+      return {
+        imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
+        provider: result.source,
+        latency,
+        prompt
+      };
+    } catch (error) {
+      errors.push(`${result.source || 'Unknown'}: ${error.message}`);
+    }
   }
+
+  throw new Error(`All providers failed: ${errors.join(' ')}`);
 };
 
 module.exports = { generateImage };
