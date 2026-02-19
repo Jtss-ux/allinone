@@ -31,6 +31,9 @@ const MODELS = {
   VIDEO_ZEROS: 'damo-vilab/text-to-video-ms-1.7b',
 };
 
+const imageRoutes = require('./src/routes/imageRoutes');
+const providerStatusRoutes = require('./src/routes/providerStatus');
+
 // CORS configuration - Allow all origins for now (you can restrict this later)
 const corsOptions = {
   origin: '*',
@@ -63,8 +66,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-const imageRoutes = require('./src/routes/imageRoutes');
-const providerStatusRoutes = require('./src/routes/providerStatus');
 
 // Routes
 
