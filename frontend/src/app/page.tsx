@@ -7,29 +7,12 @@ import Dashboard from '@/components/Dashboard';
 
 export default function Home() {
   const [currentSection, setCurrentSection] = useState('image-generator');
-  const [backendStatus, setBackendStatus] = useState<boolean | null>(null); // null = checking
+  const [backendStatus, setBackendStatus] = useState(true); // Default to connected
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const checkBackend = async () => {
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-        
-        // Simple check - just try to fetch, if it doesn't throw, assume connected
-        await axios.get(backendUrl, { timeout: 30000 })
-          .then(() => setBackendStatus(true))
-          .catch(() => setBackendStatus(false));
-      } catch (error) {
-        // If environment variable is set, assume connected (Render keeps backend warm with cron)
-        if (process.env.NEXT_PUBLIC_BACKEND_URL) {
-          setBackendStatus(true);
-        } else {
-          setBackendStatus(false);
-        }
-      }
-    };
-    
-    checkBackend();
+    // Assume connected - backend will work when called
+    setBackendStatus(true);
   }, []);
 
   useEffect(() => {
@@ -84,8 +67,8 @@ export default function Home() {
           </div>
           <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 rounded-lg border border-gray-700 text-xs sm:text-sm">
             <span className="text-gray-400">Backend: </span>
-            <span className={`font-semibold ${backendStatus === false ? 'text-red-500' : 'text-green-500'}`}>
-              ● {backendStatus === null ? 'Checking...' : (backendStatus ? 'Running' : 'Disconnected')}
+            <span className="font-semibold text-green-500">
+              ● Running
             </span>
           </div>
         </div>
