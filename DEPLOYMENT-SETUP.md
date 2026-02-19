@@ -24,10 +24,13 @@ Add these in Render dashboard → Environment:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `TOGETHER_API_KEY` | **Recommended** | **3 months free** FLUX at [together.ai](https://together.ai). Best free option. |
-| `REPLICATE_API_TOKEN` | Optional | Free tier at [replicate.com](https://replicate.com). Also for img2img. |
-| `PRODIA_API_KEY` | Optional | Free tier at [prodia.com](https://prodia.com). FLUX schnell. |
-| `HUGGING_FACE_API_KEY` | Optional | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). Uses FLUX/SDXL. |
+| `PRODIA_API_KEY` or `PRODIA_LEGACY_API_KEY` | **Recommended** | [prodia.com](https://prodia.com). Tries flux-fast + flux-klein. |
+| `HUGGING_FACE_API_KEY` | **Recommended** | [hf.co/settings/tokens](https://huggingface.co/settings/tokens). 6 SD/FLUX models. |
+| `REPLICATE_API_TOKEN` | Optional | [replicate.com](https://replicate.com). FLUX schnell + SD. Also for img2img. |
+| `FAL_KEY` | Optional | [fal.ai](https://fal.ai). FLUX schnell. |
+| `DEEPINFRA_API_KEY` | Optional | [deepinfra.com](https://deepinfra.com). FLUX-2-klein. |
+| `TOGETHER_API_KEY` | Optional | [together.ai](https://together.ai). 3mo free FLUX. |
+| `SEGMIND_API_KEY` | Optional | [segmind.com](https://segmind.com). SDXL. |
 | `OPENAI_API_KEY` | Optional | For chat, TTS, summarization. |
 | `RAPIDAPI_KEY` | Optional | For audio, background removal, summarization. |
 | `CLIPDROP_API_KEY` | Optional | Alternative image provider. |
