@@ -1,5 +1,6 @@
 const axios = require('axios');
 const https = require('https');
+const FormData = require('form-data');
 
 const keepAliveAgent = new https.Agent({ keepAlive: true });
 
@@ -81,8 +82,8 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   const hfModels = [
+    'prompthero/openjourney',
     'CompVis/stable-diffusion-v1-4',
-    'stabilityai/stable-diffusion-2-1',
   ];
 
   const errors = [];
@@ -134,37 +135,48 @@ const generateWithClipdrop = async (prompt) => {
   return { imageBuffer: Buffer.from(response.data), source: 'clipdrop' };
 };
 
+const generateWithReplicate = async (prompt) => {
+  if (!process.env.REPLICATE_API_TOKEN) {
+    throw new Error('REPLICATE_API_TOKEN not configured');
+  }
+
+  const response = await axiosClient.post('https://api.replicate.com/v1/predictions', {
+    version: 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+    input: { prompt }
+  }, {
+    headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`, 'Content-Type': 'application/json' }
+  });
+
+  const predictionId = response.data.id;
+  let result;
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const check = await axiosClient.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}` }
+    });
+    if (check.data.status === 'succeeded') {
+      result = check.data;
+      break;
+    } else if (check.data.status === 'failed') {
+      throw new Error('Replicate generation failed');
+    }
+  }
+  if (result?.output?.[0]) {
+    const imgResponse = await axiosClient.get(result.output[0], { responseType: 'arraybuffer' });
+    return { imageBuffer: Buffer.from(imgResponse.data, 'binary'), source: 'replicate' };
+  }
+  throw new Error('Replicate timeout or no output');
+};
+
 const generateImage = async (prompt, opts = {}) => {
   const start = Date.now();
 
   const providers = [];
 
-  providers.push({
-    name: 'pollinations',
-    func: () => generateWithPollinations({
-      encodedPrompt: encodeURIComponent(prompt),
-      width: opts.width || 1024,
-      height: opts.height || 1024,
-      seed: opts.seed || Math.floor(Math.random() * 1000000)
-    })
-  });
-
-  providers.push({
-    name: 'craiyon',
-    func: () => generateWithCraiyon(prompt)
-  });
-
   if (process.env.OPENAI_API_KEY) {
     providers.push({
       name: 'openai',
       func: () => generateWithOpenAI(prompt, opts.steps)
-    });
-  }
-
-  if (process.env.HUGGING_FACE_API_KEY) {
-    providers.push({
-      name: 'huggingface',
-      func: () => generateWithHuggingFace(prompt)
     });
   }
 
@@ -175,12 +187,36 @@ const generateImage = async (prompt, opts = {}) => {
     });
   }
 
+  if (process.env.REPLICATE_API_TOKEN) {
+    providers.push({
+      name: 'replicate',
+      func: () => generateWithReplicate(prompt)
+    });
+  }
+
+  if (process.env.HUGGING_FACE_API_KEY) {
+    providers.push({
+      name: 'huggingface',
+      func: () => generateWithHuggingFace(prompt)
+    });
+  }
+
   if (process.env.CLIPDROP_API_KEY) {
     providers.push({
       name: 'clipdrop',
       func: () => generateWithClipdrop(prompt)
     });
   }
+
+  providers.push({
+    name: 'pollinations',
+    func: () => generateWithPollinations({
+      encodedPrompt: encodeURIComponent(prompt),
+      width: opts.width || 1024,
+      height: opts.height || 1024,
+      seed: opts.seed || Math.floor(Math.random() * 1000000)
+    })
+  });
 
   const errors = [];
 
