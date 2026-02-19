@@ -27,14 +27,12 @@ const MODELS = {
   VIDEO_ZEROS: 'damo-vilab/text-to-video-ms-1.7b',
 };
 
-// CORS configuration
+// CORS configuration - Allow all origins for now (you can restrict this later)
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',') 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://allinone-opal.vercel.app', 'https://allinone--rosabellaismyna.replit.app', '*.pages.dev', '*.cloudflareapps.com'],
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept']
 };
 
 // Middleware
