@@ -11,8 +11,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || process.env.REPLIT_DEV_PORT || 5000;
 
-// Hugging Face API configuration
+// API Keys Configuration
 const HUGGING_FACE_API_KEY = process.env.HUGGING_FACE_API_KEY || '';
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const LTX_API_KEY = process.env.LTX_API_KEY || '';
 
 // AI Models on Hugging Face
 const MODELS = {
@@ -347,6 +351,153 @@ app.post('/api/chat', upload.none(), async (req, res) => {
     console.error('Chat error:', error.message);
     res.status(500).json({ 
       error: 'Failed to get AI response',
+      message: error.message 
+    });
+  }
+});
+
+// RapidAPI - Text Summarization
+app.post('/api/text/summarize', upload.none(), async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    if (RAPIDAPI_KEY) {
+      try {
+        const response = await axios.post(
+          'https://gpt-summarization.p.rapidapi.com/summarize',
+          {
+            text: text,
+            num_sentences: 3
+          },
+          {
+            headers: {
+              'content-type': 'application/json',
+              'X-RapidAPI-Key': RAPIDAPI_KEY,
+              'X-RapidAPI-Host': 'gpt-summarization.p.rapidapi.com'
+            }
+          }
+        );
+
+        res.json({
+          success: true,
+          summary: response.data.summary,
+          provider: 'rapidapi'
+        });
+        return;
+      } catch (rapidError) {
+        console.log('RapidAPI summarization failed:', rapidError.message);
+      }
+    }
+
+    // Fallback using OpenAI
+    if (OPENAI_API_KEY) {
+      const response = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'Summarize the following text in 2-3 sentences:' },
+            { role: 'user', content: text }
+          ],
+          max_tokens: 200
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      res.json({
+        success: true,
+        summary: response.data.choices[0].message.content,
+        provider: 'openai'
+      });
+      return;
+    }
+
+    res.status(503).json({
+      success: false,
+      error: 'Summarization service unavailable'
+    });
+  } catch (error) {
+    console.error('Summarization error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to summarize text',
+      message: error.message 
+    });
+  }
+});
+
+// RapidAPI - Background Removal
+app.post('/api/image/remove-background', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Image file is required' });
+    }
+
+    if (RAPIDAPI_KEY) {
+      try {
+        // Read image file as base64
+        const imageBuffer = fs.readFileSync(req.file.path);
+        const base64Image = imageBuffer.toString('base64');
+
+        const response = await axios.post(
+          'https://background-removal.p.rapidapi.com/remove',
+          {
+            image: `data:image/jpeg;base64,${base64Image}`
+          },
+          {
+            headers: {
+              'content-type': 'application/json',
+              'X-RapidAPI-Key': RAPIDAPI_KEY,
+              'X-RapidAPI-Host': 'background-removal.p.rapidapi.com'
+            },
+            responseType: 'arraybuffer'
+          }
+        );
+
+        // Convert response to base64
+        const base64Result = Buffer.from(response.data, 'binary').toString('base64');
+        const dataUrl = `data:image/png;base64,${base64Result}`;
+
+        // Clean up uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+          success: true,
+          imageUrl: dataUrl,
+          provider: 'rapidapi'
+        });
+        return;
+      } catch (rapidError) {
+        console.log('RapidAPI background removal failed:', rapidError.message);
+      }
+    }
+
+    // Clean up file even if failed
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(503).json({
+      success: false,
+      error: 'Background removal service unavailable',
+      message: 'RAPIDAPI_KEY not configured or service failed'
+    });
+  } catch (error) {
+    // Clean up file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    console.error('Background removal error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to remove background',
       message: error.message 
     });
   }
