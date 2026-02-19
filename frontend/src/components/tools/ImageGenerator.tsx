@@ -101,37 +101,33 @@ export default function ImageGenerator() {
           <div className="mt-6">
             <h4 className="font-semibold mb-2">✅ Generated Image</h4>
             
-            {result.imageBase64 && (
+            {(result.imageUrl || result.imageBase64) && (
               <div className="mb-4">
                 <img 
-                  src={result.imageBase64} 
+                  src={result.imageUrl || result.imageBase64} 
                   alt="Generated" 
                   className="w-full rounded-lg border border-gray-600"
                 />
               </div>
             )}
             
-            {result.imageBase64 && (
+            {(result.imageUrl || result.imageBase64) && (
               <a
-                href={result.imageBase64}
-                download={`ai-image-${result.jobId}.png`}
+                href={result.imageUrl || result.imageBase64}
+                download={`ai-image-${Date.now()}.png`}
                 className="inline-block w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition mb-4"
               >
                 ⬇️ Download Image
               </a>
             )}
             
-            <div className="p-3 bg-gray-700 rounded-lg">
-              <p className="text-sm text-gray-300">
-                <strong>Job ID:</strong> {result.jobId}
-              </p>
-              <p className="text-sm text-gray-300">
-                <strong>Prompt:</strong> {result.prompt}
-              </p>
-              <p className="text-sm text-gray-300">
-                <strong>Device:</strong> {result.device}
-              </p>
-            </div>
+            {result.prompt && (
+              <div className="p-3 bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-300">
+                  <strong>Prompt:</strong> {result.prompt}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
