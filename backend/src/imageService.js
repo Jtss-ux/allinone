@@ -80,9 +80,9 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   const hfModels = [
-    'black-forest-labs/FLUX.1-schnell',
-    'black-forest-labs/FLUX.1-dev',
     'stabilityai/stable-diffusion-xl-base-1.0',
+    'black-forest-labs/FLUX.1-schnell',
+    'ByteDance/Hyper-SD',
   ];
 
   const errors = [];
@@ -158,31 +158,44 @@ const generateWithTogether = async (prompt, opts = {}) => {
 };
 
 const generateWithProdia = async (prompt) => {
-  if (!process.env.PRODIA_API_KEY) {
+  const key = process.env.PRODIA_API_KEY || process.env.PRODIA_LEGACY_API_KEY;
+  if (!key) {
     throw new Error('PRODIA_API_KEY not configured');
   }
 
   const response = await axiosClient.post(
     'https://inference.prodia.com/v2/job',
     {
-      type: 'inference.flux-fast.schnell.txt2img.v2',
+      type: 'inference.flux-fast.schnell.txt2img.v1',
       config: { prompt },
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.PRODIA_API_KEY}`,
+        Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
         Accept: 'image/png',
       },
       responseType: 'arraybuffer',
       timeout: 60000,
+      validateStatus: (s) => s < 500,
     }
   );
 
   if (response.status !== 200) {
-    throw new Error(`Prodia failed: ${response.status}`);
+    let errMsg = response.statusText;
+    try {
+      const d = response.data;
+      if (Buffer.isBuffer(d)) errMsg = d.toString('utf8').slice(0, 200);
+      else if (typeof d === 'string') errMsg = d.slice(0, 200);
+      else if (d?.error) errMsg = d.error;
+    } catch (_) {}
+    throw new Error(`Prodia ${response.status}: ${errMsg}`);
   }
-  return { imageBuffer: Buffer.from(response.data), source: 'prodia' };
+  const data = response.data;
+  if (!data || (Buffer.isBuffer(data) && data.length < 100)) {
+    throw new Error('Prodia returned empty or invalid image');
+  }
+  return { imageBuffer: Buffer.isBuffer(data) ? data : Buffer.from(data), source: 'prodia' };
 };
 
 const generateWithSegmind = async (prompt, opts = {}) => {
@@ -266,6 +279,20 @@ const generateImage = async (prompt, opts = {}) => {
 
   const providers = [];
 
+  if (process.env.PRODIA_API_KEY || process.env.PRODIA_LEGACY_API_KEY) {
+    providers.push({
+      name: 'prodia',
+      func: () => generateWithProdia(prompt)
+    });
+  }
+
+  if (process.env.HUGGING_FACE_API_KEY) {
+    providers.push({
+      name: 'huggingface',
+      func: () => generateWithHuggingFace(prompt)
+    });
+  }
+
   if (process.env.REPLICATE_API_TOKEN) {
     providers.push({
       name: 'replicate',
@@ -280,24 +307,10 @@ const generateImage = async (prompt, opts = {}) => {
     });
   }
 
-  if (process.env.PRODIA_API_KEY) {
-    providers.push({
-      name: 'prodia',
-      func: () => generateWithProdia(prompt)
-    });
-  }
-
   if (process.env.SEGMIND_API_KEY) {
     providers.push({
       name: 'segmind',
       func: () => generateWithSegmind(prompt, opts)
-    });
-  }
-
-  if (process.env.HUGGING_FACE_API_KEY) {
-    providers.push({
-      name: 'huggingface',
-      func: () => generateWithHuggingFace(prompt)
     });
   }
 
