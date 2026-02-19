@@ -121,25 +121,17 @@ const generateWithHuggingFace = async (prompt) => {
   throw new Error(`All Hugging Face fallbacks failed. ${errors.join(' | ')}`);
 };
 
-const generateWithOpenAI = async (prompt, steps = 15) => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY not configured');
-  }
-
-  const size = steps >= 40 ? '1024x1024' : '512x512';
-  const body = { model: 'dall-e-3', prompt, n: 1, size, quality: steps >= 40 ? 'hd' : 'standard' };
-
-  const response = await axiosClient.post('https://api.openai.com/v1/images/generations', body, {
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }
+const generateWithCraiyon = async (prompt) => {
+  const response = await axiosClient.post('https://api.craiyon.com/draw', { prompt }, {
+    headers: { 'Content-Type': 'application/json' }
   });
 
-  const imageUrl = response.data?.data?.[0]?.url;
-  if (!imageUrl) {
-    throw new Error('OpenAI did not return image URL');
+  if (response.data.images && response.data.images[0]) {
+    const base64 = response.data.images[0];
+    return { imageBuffer: Buffer.from(base64, 'base64'), source: 'craiyon' };
   }
 
-  const imgResponse = await axiosClient.get(imageUrl, { responseType: 'arraybuffer' });
-  return { imageBuffer: Buffer.from(imgResponse.data, 'binary'), source: 'openai' };
+  throw new Error('Craiyon did not return image');
 };
 
 const generateImage = async (prompt, opts = {}) => {
@@ -153,6 +145,8 @@ const generateImage = async (prompt, opts = {}) => {
     height: opts.height || 1024,
     seed: opts.seed || Math.floor(Math.random() * 1000000)
   }));
+
+  providers.push(() => generateWithCraiyon(prompt));
 
   if (process.env.OPENAI_API_KEY) {
     providers.push(() => generateWithOpenAI(prompt, opts.steps));
