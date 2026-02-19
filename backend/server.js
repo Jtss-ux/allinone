@@ -16,8 +16,8 @@ const HUGGING_FACE_API_KEY = process.env.HUGGING_FACE_API_KEY || '';
 
 // AI Models on Hugging Face
 const MODELS = {
-  // Image Generation
-  IMAGE_STABLE_DIFFUSION: 'stabilityai/stable-diffusion-2-1',
+  // Image Generation - Using a working model
+  IMAGE: 'runwayml/stable-diffusion-v1-5',
   
   // Audio Generation
   AUDIO_BARK: 'suno/bark',
@@ -87,7 +87,7 @@ app.post('/api/image/generate', upload.none(), async (req, res) => {
     }
 
     // Call Hugging Face API for image generation
-    const apiUrl = `https://api-inference.huggingface.co/models/${MODELS.IMAGE_STABLE_DIFFUSION}`;
+    const apiUrl = `https://api-inference.huggingface.co/models/${MODELS.IMAGE}`;
     const response = await axios.post(
       apiUrl,
       { inputs: prompt, parameters: { negative_prompt } },
