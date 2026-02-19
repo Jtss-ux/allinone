@@ -121,17 +121,17 @@ const generateWithHuggingFace = async (prompt) => {
   throw new Error(`All Hugging Face fallbacks failed. ${errors.join(' | ')}`);
 };
 
-const generateWithCraiyon = async (prompt) => {
-  const response = await axiosClient.post('https://api.craiyon.com/draw', { prompt }, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-
-  if (response.data.images && response.data.images[0]) {
-    const base64 = response.data.images[0];
-    return { imageBuffer: Buffer.from(base64, 'base64'), source: 'craiyon' };
+const generateWithClipdrop = async (prompt) => {
+  if (!process.env.CLIPDROP_API_KEY) {
+    throw new Error('CLIPDROP_API_KEY not configured');
   }
 
-  throw new Error('Craiyon did not return image');
+  const response = await axiosClient.post('https://clipdrop-api.co/text-to-image/v1', { prompt }, {
+    headers: { 'x-api-key': process.env.CLIPDROP_API_KEY },
+    responseType: 'arraybuffer'
+  });
+
+  return { imageBuffer: Buffer.from(response.data), source: 'clipdrop' };
 };
 
 const generateImage = async (prompt, opts = {}) => {
@@ -154,6 +154,14 @@ const generateImage = async (prompt, opts = {}) => {
 
   if (process.env.HUGGING_FACE_API_KEY) {
     providers.push(() => generateWithHuggingFace(prompt));
+  }
+
+  if (process.env.DEEPAI_API_KEY) {
+    providers.push(() => generateWithDeepAI(prompt));
+  }
+
+  if (process.env.CLIPDROP_API_KEY) {
+    providers.push(() => generateWithClipdrop(prompt));
   }
 
   const errors = [];
