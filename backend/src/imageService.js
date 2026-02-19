@@ -56,12 +56,12 @@ const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) 
   const pollinationsUrls = buildPollinationsUrls({ encodedPrompt, width, height, seed });
   const errors = [];
 
-  for (const url of pollinationsUrls.slice(0, process.env.MAX_IMAGE_FALLBACKS || 5)) {
+  for (const url of pollinationsUrls.slice(0, 3)) {
     try {
       const response = await requestWithRetry(
         url,
-        { method: 'GET', responseType: 'arraybuffer' },
-        2
+        { method: 'GET', responseType: 'arraybuffer', timeout: 25000 },
+        1
       );
 
       return { imageBuffer: Buffer.from(response.data), source: 'pollinations' };
@@ -71,7 +71,7 @@ const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) 
     }
   }
 
-  throw new Error(`All Pollinations fallbacks failed. ${errors.join(' | ')}`);
+  throw new Error(`Pollinations unavailable (530). Try adding REPLICATE_API_TOKEN or TOGETHER_API_KEY.`);
 };
 
 const generateWithHuggingFace = async (prompt) => {
@@ -80,8 +80,9 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   const hfModels = [
-    'runwayml/stable-diffusion-v1-5',
-    'stabilityai/stable-diffusion-2-1',
+    'black-forest-labs/FLUX.1-schnell',
+    'black-forest-labs/FLUX.1-dev',
+    'stabilityai/stable-diffusion-xl-base-1.0',
   ];
 
   const errors = [];
@@ -118,6 +119,70 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   throw new Error(`All Hugging Face fallbacks failed. ${errors.join(' | ')}`);
+};
+
+const generateWithTogether = async (prompt, opts = {}) => {
+  if (!process.env.TOGETHER_API_KEY) {
+    throw new Error('TOGETHER_API_KEY not configured');
+  }
+
+  const response = await axiosClient.post(
+    'https://api.together.xyz/v1/images/generations',
+    {
+      prompt,
+      model: 'black-forest-labs/FLUX.1-schnell-Free',
+      steps: opts.steps || 20,
+      width: opts.width || 1024,
+      height: opts.height || 1024,
+      seed: opts.seed ?? Math.floor(Math.random() * 1000000),
+      response_format: 'base64',
+      output_format: 'png',
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.TOGETHER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      responseType: 'json',
+      timeout: 60000,
+    }
+  );
+
+  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
+    throw new Error(`Together.ai failed: ${response.status}`);
+  }
+  return {
+    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
+    source: 'together',
+  };
+};
+
+const generateWithProdia = async (prompt) => {
+  if (!process.env.PRODIA_API_KEY) {
+    throw new Error('PRODIA_API_KEY not configured');
+  }
+
+  const response = await axiosClient.post(
+    'https://inference.prodia.com/v2/job',
+    {
+      type: 'inference.flux-fast.schnell.txt2img.v2',
+      config: { prompt },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.PRODIA_API_KEY}`,
+        'Content-Type': 'application/json',
+        Accept: 'image/png',
+      },
+      responseType: 'arraybuffer',
+      timeout: 60000,
+    }
+  );
+
+  if (response.status !== 200) {
+    throw new Error(`Prodia failed: ${response.status}`);
+  }
+  return { imageBuffer: Buffer.from(response.data), source: 'prodia' };
 };
 
 const generateWithSegmind = async (prompt, opts = {}) => {
@@ -208,6 +273,20 @@ const generateImage = async (prompt, opts = {}) => {
     });
   }
 
+  if (process.env.TOGETHER_API_KEY) {
+    providers.push({
+      name: 'together',
+      func: () => generateWithTogether(prompt, opts)
+    });
+  }
+
+  if (process.env.PRODIA_API_KEY) {
+    providers.push({
+      name: 'prodia',
+      func: () => generateWithProdia(prompt)
+    });
+  }
+
   if (process.env.SEGMIND_API_KEY) {
     providers.push({
       name: 'segmind',
@@ -256,7 +335,9 @@ const generateImage = async (prompt, opts = {}) => {
     }
   }
 
-  throw new Error('Image generation services are temporarily unavailable. Please try again later.');
+  throw new Error(
+    'Image generation failed. Add one of these API keys in Render: REPLICATE_API_TOKEN (replicate.com), TOGETHER_API_KEY (together.ai, free FLUX), PRODIA_API_KEY (prodia.com), or HUGGING_FACE_API_KEY.'
+  );
 };
 
 const generateImageToImageReplicate = async (imageDataUrl, prompt, opts = {}) => {

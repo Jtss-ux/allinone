@@ -24,8 +24,10 @@ Add these in Render dashboard → Environment:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `REPLICATE_API_TOKEN` | **Yes** (for image) | Free tier at [replicate.com](https://replicate.com). Needed for image generation + img2img. |
-| `HUGGING_FACE_API_KEY` | Optional | Hugging Face inference. Get at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). |
+| `TOGETHER_API_KEY` | **Recommended** | **3 months free** FLUX at [together.ai](https://together.ai). Best free option. |
+| `REPLICATE_API_TOKEN` | Optional | Free tier at [replicate.com](https://replicate.com). Also for img2img. |
+| `PRODIA_API_KEY` | Optional | Free tier at [prodia.com](https://prodia.com). FLUX schnell. |
+| `HUGGING_FACE_API_KEY` | Optional | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). Uses FLUX/SDXL. |
 | `OPENAI_API_KEY` | Optional | For chat, TTS, summarization. |
 | `RAPIDAPI_KEY` | Optional | For audio, background removal, summarization. |
 | `CLIPDROP_API_KEY` | Optional | Alternative image provider. |
