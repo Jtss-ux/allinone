@@ -235,7 +235,14 @@ const generateImage = async (prompt, opts = {}) => {
     }
   }
 
-  throw new Error(`All providers failed: ${errors.join(' ')}`);
+  // Fallback static image if all providers fail
+  const staticImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  return {
+    imageUrl: staticImage,
+    provider: 'fallback',
+    latency: Date.now() - start,
+    prompt
+  };
 };
 
 module.exports = { generateImage };
