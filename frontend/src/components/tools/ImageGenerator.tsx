@@ -37,6 +37,19 @@ export default function ImageGenerator() {
     }
   };
 
+  const handleDownload = () => {
+    const imageUrl = result?.imageUrl || result?.imageBase64;
+    if (!imageUrl) return;
+
+    // Create a temporary link element
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `ai-image-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 rounded-lg p-8">
@@ -112,13 +125,12 @@ export default function ImageGenerator() {
             )}
             
             {(result.imageUrl || result.imageBase64) && (
-              <a
-                href={result.imageUrl || result.imageBase64}
-                download={`ai-image-${Date.now()}.png`}
-                className="inline-block w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition mb-4"
+              <button
+                onClick={handleDownload}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition mb-4"
               >
                 ⬇️ Download Image
-              </a>
+              </button>
             )}
             
             {result.prompt && (
