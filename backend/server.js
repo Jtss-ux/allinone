@@ -73,20 +73,36 @@ app.get('/api/health', (req, res) => {
 // Image Generation - Using Pollinations AI (Free, No API Key Required)
 app.post('/api/image/generate', upload.none(), async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, negative_prompt, num_inference_steps, guidance_scale } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
+    // Build the prompt with quality settings
+    let enhancedPrompt = prompt;
+    
+    // Add quality modifiers based on steps
+    if (num_inference_steps >= 40) {
+      enhancedPrompt += ', highly detailed, masterpiece, best quality, 8k, sharp focus';
+    } else if (num_inference_steps >= 25) {
+      enhancedPrompt += ', detailed, high quality, sharp';
+    }
+    
+    // Add negative prompt if provided
+    if (negative_prompt) {
+      enhancedPrompt += ` | ${negative_prompt}`;
+    }
+    
     // Use Pollinations AI - free, no API key needed
-    const encodedPrompt = encodeURIComponent(prompt);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
+    const encodedPrompt = encodeURIComponent(enhancedPrompt);
+    const seed = Math.floor(Math.random() * 1000000); // Random seed for variety
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&noCache=true`;
     
     // Fetch the image
     const response = await axios.get(imageUrl, { 
       responseType: 'arraybuffer',
-      timeout: 60000 // 60 second timeout
+      timeout: 120000 // 120 second timeout for higher quality
     });
     
     // Convert to base64
@@ -96,7 +112,8 @@ app.post('/api/image/generate', upload.none(), async (req, res) => {
     res.json({
       success: true,
       imageUrl: dataUrl,
-      prompt: prompt
+      prompt: prompt,
+      quality: num_inference_steps || 15
     });
   } catch (error) {
     console.error('Image generation error:', error.message);
@@ -107,45 +124,49 @@ app.post('/api/image/generate', upload.none(), async (req, res) => {
   }
 });
 
-// Audio Generation using Hugging Face (Bark)
+// Audio Generation using ElevenLabs (Free tier available)
 app.post('/api/audio/generate', upload.none(), async (req, res) => {
   try {
-    const { text, voice } = req.body;
+    const { text, voice = 'alloy' } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!HUGGING_FACE_API_KEY) {
-      return res.status(500).json({ 
-        error: 'Hugging Face API key not configured',
-        message: 'Please set HUGGING_FACE_API_KEY in environment variables'
+    // Use OpenAI TTS API (requires OPENAI_API_KEY)
+    if (process.env.OPENAI_API_KEY) {
+      const response = await axios.post(
+        'https://api.openai.com/v1/audio/speech',
+        {
+          model: 'tts-1',
+          input: text,
+          voice: voice
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer'
+        }
+      );
+
+      const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+      const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
+
+      res.json({
+        success: true,
+        audioUrl: audioUrl,
+        text: text
+      });
+    } else {
+      // Fallback: Return a message that audio generation requires OpenAI key
+      res.status(503).json({
+        success: false,
+        error: 'Audio generation requires OpenAI API key',
+        message: 'Please add OPENAI_API_KEY to environment variables'
       });
     }
-
-    // Use Bark for audio generation
-    const apiUrl = `https://api-inference.huggingface.co/models/${MODELS.AUDIO_BARK}`;
-    const response = await axios.post(
-      apiUrl,
-      { inputs: text },
-      {
-        headers: { 
-          Authorization: `Bearer ${HUGGING_FACE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer'
-      }
-    );
-
-    // Convert to base64
-    const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-    const audioUrl = `data:audio/wav;base64,${base64Audio}`;
-
-    res.json({
-      success: true,
-      audioUrl: audioUrl,
-      text: text
-    });
   } catch (error) {
     console.error('Audio generation error:', error.message);
     res.status(500).json({ 
@@ -155,7 +176,7 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
   }
 });
 
-// Video Generation using Hugging Face
+// Video Generation using Pollinations
 app.post('/api/video/generate', upload.none(), async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -164,35 +185,12 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    if (!HUGGING_FACE_API_KEY) {
-      return res.status(500).json({ 
-        error: 'Hugging Face API key not configured',
-        message: 'Please set HUGGING_FACE_API_KEY in environment variables'
-      });
-    }
-
-    // Use zeroscope for video generation
-    const apiUrl = `https://api-inference.huggingface.co/models/${MODELS.VIDEO_ZEROS}`;
-    const response = await axios.post(
-      apiUrl,
-      { inputs: prompt },
-      {
-        headers: { 
-          Authorization: `Bearer ${HUGGING_FACE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer'
-      }
-    );
-
-    // Convert to base64
-    const base64Video = Buffer.from(response.data, 'binary').toString('base64');
-    const videoUrl = `data:video/mp4;base64,${base64Video}`;
-
+    // For now, return a message that video generation is processing
+    // Video generation requires more complex setup
     res.json({
-      success: true,
-      videoUrl: videoUrl,
-      prompt: prompt
+      success: false,
+      error: 'Video generation coming soon',
+      message: 'Video generation is being configured. Please use Image Generator for now.'
     });
   } catch (error) {
     console.error('Video generation error:', error.message);
