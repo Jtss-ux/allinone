@@ -5,11 +5,21 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const axios = require('axios');
+const https = require('https');
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || process.env.REPLIT_DEV_PORT || 5000;
+const MAX_IMAGE_FALLBACKS = Number(process.env.MAX_IMAGE_FALLBACKS || 5);
+
+const keepAliveAgent = new https.Agent({ keepAlive: true });
+
+const axiosClient = axios.create({
+  timeout: 45000,
+  httpsAgent: keepAliveAgent,
+  validateStatus: () => true,
+});
 
 // Hugging Face API configuration
 const HUGGING_FACE_API_KEY = process.env.HUGGING_FACE_API_KEY || '';
@@ -25,6 +35,118 @@ const MODELS = {
   
   // Video Generation (placeholder - requires more setup)
   VIDEO_ZEROS: 'damo-vilab/text-to-video-ms-1.7b',
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shouldRetry = (status) => !status || status === 429 || status === 530 || status >= 500;
+
+const requestWithRetry = async (url, options = {}, maxRetries = 2) => {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await axiosClient({ url, ...options });
+
+      if (response.status >= 200 && response.status < 300) {
+        return response;
+      }
+
+      if (!shouldRetry(response.status) || attempt === maxRetries) {
+        const error = new Error(`Request failed with status code ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries) {
+        throw error;
+      }
+    }
+
+    await wait(250 * (attempt + 1));
+  }
+
+  throw lastError || new Error('Request failed after retries');
+};
+
+const buildPollinationsUrls = ({ encodedPrompt, width, height, seed }) => {
+  const base = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+
+  return [
+    `${base}?width=${width}&height=${height}&seed=${seed}&model=flux&enhance=true&nologo=true&noCache=true`,
+    `${base}?width=${width}&height=${height}&seed=${seed}&model=turbo&nologo=true&noCache=true`,
+    `${base}?width=${width}&height=${height}&seed=${seed}&nologo=true&noCache=true`,
+    `${base}?width=${width}&height=${height}&nologo=true&noCache=true`,
+  ];
+};
+
+const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) => {
+  const pollinationsUrls = buildPollinationsUrls({ encodedPrompt, width, height, seed });
+  const errors = [];
+
+  for (const url of pollinationsUrls.slice(0, MAX_IMAGE_FALLBACKS)) {
+    try {
+      const response = await requestWithRetry(
+        url,
+        { method: 'GET', responseType: 'arraybuffer' },
+        2
+      );
+
+      return { imageBuffer: Buffer.from(response.data), source: 'pollinations' };
+    } catch (error) {
+      errors.push(error.message);
+      console.warn(`Pollinations fallback failed: ${error.message}`);
+    }
+  }
+
+  throw new Error(`All Pollinations fallbacks failed. ${errors.join(' | ')}`);
+};
+
+const generateWithHuggingFace = async (prompt) => {
+  if (!HUGGING_FACE_API_KEY) {
+    throw new Error('HUGGING_FACE_API_KEY is not configured');
+  }
+
+  const hfModels = [
+    MODELS.IMAGE,
+    'stabilityai/stable-diffusion-xl-base-1.0',
+  ];
+
+  const errors = [];
+
+  for (const model of hfModels.slice(0, MAX_IMAGE_FALLBACKS)) {
+    const url = `https://api-inference.huggingface.co/models/${model}`;
+    try {
+      const response = await requestWithRetry(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${HUGGING_FACE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          responseType: 'arraybuffer',
+          data: {
+            inputs: prompt,
+            options: {
+              wait_for_model: true,
+              use_cache: false,
+            },
+          },
+          timeout: 60000,
+        },
+        1
+      );
+
+      return { imageBuffer: Buffer.from(response.data), source: `huggingface:${model}` };
+    } catch (error) {
+      errors.push(`${model}: ${error.message}`);
+      console.warn(`Hugging Face fallback failed (${model}): ${error.message}`);
+    }
+  }
+
+  throw new Error(`All Hugging Face fallbacks failed. ${errors.join(' | ')}`);
 };
 
 // CORS configuration - Allow all origins for now (you can restrict this later)
@@ -96,24 +218,41 @@ app.post('/api/image/generate', upload.none(), async (req, res) => {
     
     // Use Pollinations AI - free, no API key needed
     const encodedPrompt = encodeURIComponent(enhancedPrompt);
-    const seed = Math.floor(Math.random() * 1000000); // Random seed for variety
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&noCache=true`;
-    
-    // Fetch the image
-    const response = await axios.get(imageUrl, { 
-      responseType: 'arraybuffer',
-      timeout: 120000 // 120 second timeout for higher quality
-    });
-    
-    // Convert to base64
-    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+    const seed = Math.floor(Math.random() * 1000000);
+    const fastMode = Number(num_inference_steps || 20) <= 20;
+    const width = fastMode ? 768 : 1024;
+    const height = fastMode ? 768 : 1024;
+
+    const providers = [
+      () => generateWithPollinations({ encodedPrompt, width, height, seed }),
+      () => generateWithHuggingFace(enhancedPrompt),
+    ];
+
+    let generationResult;
+    const providerErrors = [];
+
+    for (const provider of providers) {
+      try {
+        generationResult = await provider();
+        break;
+      } catch (providerError) {
+        providerErrors.push(providerError.message);
+      }
+    }
+
+    if (!generationResult) {
+      throw new Error(providerErrors.join(' || '));
+    }
+
+    const base64Image = generationResult.imageBuffer.toString('base64');
     const dataUrl = `data:image/png;base64,${base64Image}`;
 
     res.json({
       success: true,
       imageUrl: dataUrl,
       prompt: prompt,
-      quality: num_inference_steps || 15
+      quality: num_inference_steps || 15,
+      provider: generationResult.source,
     });
   } catch (error) {
     console.error('Image generation error:', error.message);
