@@ -70,43 +70,32 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'Backend is running!' });
 });
 
-// Image Generation using Hugging Face (Stable Diffusion)
+// Image Generation - Using Pollinations AI (Free, No API Key Required)
 app.post('/api/image/generate', upload.none(), async (req, res) => {
   try {
-    const { prompt, negative_prompt } = req.body;
+    const { prompt } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    if (!HUGGING_FACE_API_KEY) {
-      return res.status(500).json({ 
-        error: 'Hugging Face API key not configured',
-        message: 'Please set HUGGING_FACE_API_KEY in environment variables'
-      });
-    }
-
-    // Call Hugging Face API for image generation
-    const apiUrl = `https://api-inference.huggingface.co/models/${MODELS.IMAGE}`;
-    const response = await axios.post(
-      apiUrl,
-      { inputs: prompt, parameters: { negative_prompt } },
-      {
-        headers: { 
-          Authorization: `Bearer ${HUGGING_FACE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer'
-      }
-    );
-
+    // Use Pollinations AI - free, no API key needed
+    const encodedPrompt = encodeURIComponent(prompt);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
+    
+    // Fetch the image
+    const response = await axios.get(imageUrl, { 
+      responseType: 'arraybuffer',
+      timeout: 60000 // 60 second timeout
+    });
+    
     // Convert to base64
     const base64Image = Buffer.from(response.data, 'binary').toString('base64');
-    const imageUrl = `data:image/png;base64,${base64Image}`;
+    const dataUrl = `data:image/png;base64,${base64Image}`;
 
     res.json({
       success: true,
-      imageUrl: imageUrl,
+      imageUrl: dataUrl,
       prompt: prompt
     });
   } catch (error) {
