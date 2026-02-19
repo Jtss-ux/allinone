@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi, mlApi } from '@/config/api';
 
 export default function BackgroundRemover() {
   const [image, setImage] = useState<File | null>(null);
@@ -30,15 +30,21 @@ export default function BackgroundRemover() {
     setResult(null);
 
     try {
-      // Using img2img with a transformation that removes background conceptually
       const formData = new FormData();
       formData.append('image', image);
-      formData.append('prompt', 'transparent background, white background, clean background');
-      formData.append('strength', '0.3');
 
-      const response = await axios.post(mlApi('/api/image/img2img'), formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      let response;
+      try {
+        response = await axios.post(backendApi('/api/image/remove-background'), formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } catch {
+        formData.append('prompt', 'transparent background, white background, clean background');
+        formData.append('strength', '0.3');
+        response = await axios.post(mlApi('/api/image/img2img'), formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
       setResult(response.data);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to process image');
@@ -91,15 +97,15 @@ export default function BackgroundRemover() {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-gray-400 mb-2">Result</p>
-                {result.imageBase64 && (
-                  <img src={result.imageBase64} alt="Result" className="w-full rounded-lg border border-gray-600" />
+                {(result.imageUrl || result.imageBase64) && (
+                  <img src={result.imageUrl || result.imageBase64} alt="Result" className="w-full rounded-lg border border-gray-600" />
                 )}
               </div>
             </div>
-            {result.imageBase64 && (
+            {(result.imageUrl || result.imageBase64) && (
               <a
-                href={result.imageBase64}
-                download={`ai-nobg-${result.jobId}.png`}
+                href={result.imageUrl || result.imageBase64}
+                download={`ai-nobg-${Date.now()}.png`}
                 className="inline-block w-full mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
               >
                 ⬇️ Download Image

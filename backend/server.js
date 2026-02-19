@@ -79,76 +79,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'Backend is running!' });
 });
 
-// Image Generation
-app.post('/api/image/generate', upload.none(), async (req, res) => {
-  try {
-    const { prompt, negative_prompt, num_inference_steps, guidance_scale } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
-    // Build the prompt with quality settings
-    let enhancedPrompt = prompt;
-    
-    // Add quality modifiers based on steps
-    if (num_inference_steps >= 40) {
-      enhancedPrompt += ', highly detailed, masterpiece, best quality, 8k, sharp focus';
-    } else if (num_inference_steps >= 25) {
-      enhancedPrompt += ', detailed, high quality, sharp';
-    }
-    
-    // Add negative prompt if provided
-    if (negative_prompt) {
-      enhancedPrompt += ` | ${negative_prompt}`;
-    }
-    
-    // Use Pollinations AI - free, no API key needed
-    const encodedPrompt = encodeURIComponent(enhancedPrompt);
-    const seed = Math.floor(Math.random() * 1000000);
-    const fastMode = Number(num_inference_steps || 20) <= 20;
-    const width = fastMode ? 768 : 1024;
-    const height = fastMode ? 768 : 1024;
-
-    const providers = [
-      () => generateWithPollinations({ encodedPrompt, width, height, seed }),
-      () => generateWithHuggingFace(enhancedPrompt),
-    ];
-
-    let generationResult;
-    const providerErrors = [];
-
-    for (const provider of providers) {
-      try {
-        generationResult = await provider();
-        break;
-      } catch (providerError) {
-        providerErrors.push(providerError.message);
-      }
-    }
-
-    if (!generationResult) {
-      throw new Error(providerErrors.join(' || '));
-    }
-
-    const base64Image = generationResult.imageBuffer.toString('base64');
-    const dataUrl = `data:image/png;base64,${base64Image}`;
-
-    res.json({
-      success: true,
-      imageUrl: dataUrl,
-      prompt: prompt,
-      quality: num_inference_steps || 15,
-      provider: generationResult.source,
-    });
-  } catch (error) {
-    console.error('Image generation error:', error.message);
-    res.status(500).json({ 
-      error: 'Failed to generate image',
-      message: error.message 
-    });
-  }
-});
+// Image generation is handled by imageRoutes (app.use('/api/image', imageRoutes))
 
 // Audio Generation - Multiple API fallback system
 app.post('/api/audio/generate', upload.none(), async (req, res) => {

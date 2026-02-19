@@ -1,8 +1,5 @@
 const axios = require('axios');
-const https = require('https');
 const FormData = require('form-data');
-
-const keepAliveAgent = new https.Agent({ keepAlive: true });
 
 const axiosClient = axios.create({
   timeout: 45000,
@@ -44,12 +41,14 @@ const requestWithRetry = async (url, options = {}, maxRetries = 2) => {
 
 const buildPollinationsUrls = ({ encodedPrompt, width, height, seed }) => {
   const base = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+  const q = `?width=${width}&height=${height}&seed=${seed}`;
 
   return [
-    `${base}?width=${width}&height=${height}&seed=${seed}&model=flux&enhance=true&nologo=true&noCache=true`,
-    `${base}?width=${width}&height=${height}&seed=${seed}&model=turbo&nologo=true&noCache=true`,
-    `${base}?width=${width}&height=${height}&seed=${seed}&nologo=true&noCache=true`,
-    `${base}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true&noCache=true`,
+    `${base}${q}&model=flux&nologo=true&noCache=true`,
+    `${base}${q}&model=turbo&nologo=true&noCache=true`,
+    `${base}${q}&nologo=true&noCache=true`,
+    `${base}${q}&model=flux&nologo=true`,
+    `${base}${q}&model=turbo&nologo=true`,
   ];
 };
 
@@ -81,8 +80,8 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   const hfModels = [
-    'prompthero/openjourney',
-    'CompVis/stable-diffusion-v1-4',
+    'runwayml/stable-diffusion-v1-5',
+    'stabilityai/stable-diffusion-2-1',
   ];
 
   const errors = [];
@@ -119,6 +118,36 @@ const generateWithHuggingFace = async (prompt) => {
   }
 
   throw new Error(`All Hugging Face fallbacks failed. ${errors.join(' | ')}`);
+};
+
+const generateWithSegmind = async (prompt, opts = {}) => {
+  if (!process.env.SEGMIND_API_KEY) {
+    throw new Error('SEGMIND_API_KEY not configured');
+  }
+
+  const response = await axiosClient.post(
+    'https://api.segmind.com/v1/sdxl1.0-txt2img',
+    {
+      prompt,
+      samples: 1,
+      scheduler: 'UniPC',
+      num_inference_steps: opts.steps || 25,
+      guidance_scale: 7.5,
+      width: opts.width || 1024,
+      height: opts.height || 1024,
+      seed: opts.seed ?? Math.floor(Math.random() * 1000000),
+    },
+    {
+      headers: { 'x-api-key': process.env.SEGMIND_API_KEY, 'Content-Type': 'application/json' },
+      responseType: 'arraybuffer',
+      timeout: 60000,
+    }
+  );
+
+  if (response.status !== 200) {
+    throw new Error(`Segmind failed: ${response.status}`);
+  }
+  return { imageBuffer: Buffer.from(response.data), source: 'segmind' };
 };
 
 const generateWithClipdrop = async (prompt) => {
@@ -172,24 +201,17 @@ const generateImage = async (prompt, opts = {}) => {
 
   const providers = [];
 
-  if (process.env.OPENAI_API_KEY) {
-    providers.push({
-      name: 'openai',
-      func: () => generateWithOpenAI(prompt, opts.steps)
-    });
-  }
-
-  if (process.env.DEEPAI_API_KEY) {
-    providers.push({
-      name: 'deepai',
-      func: () => generateWithDeepAI(prompt)
-    });
-  }
-
   if (process.env.REPLICATE_API_TOKEN) {
     providers.push({
       name: 'replicate',
       func: () => generateWithReplicate(prompt)
+    });
+  }
+
+  if (process.env.SEGMIND_API_KEY) {
+    providers.push({
+      name: 'segmind',
+      func: () => generateWithSegmind(prompt, opts)
     });
   }
 
@@ -234,14 +256,81 @@ const generateImage = async (prompt, opts = {}) => {
     }
   }
 
-  // Fallback static image if all providers fail
-  const staticImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-  return {
-    imageUrl: staticImage,
-    provider: 'fallback',
-    latency: Date.now() - start,
-    prompt
-  };
+  throw new Error('Image generation services are temporarily unavailable. Please try again later.');
 };
 
-module.exports = { generateImage };
+const generateImageToImageReplicate = async (imageDataUrl, prompt, opts = {}) => {
+  if (!process.env.REPLICATE_API_TOKEN) {
+    throw new Error('REPLICATE_API_TOKEN not configured');
+  }
+
+  const strength = opts.strength ?? 0.75;
+  const response = await axiosClient.post(
+    'https://api.replicate.com/v1/predictions',
+    {
+      version: 'stability-ai/stable-diffusion-img2img:15a3689ee13b0d2616e98820eca31d4c3abcd36672df6afce5cb6feb1d66087d',
+      input: {
+        image: imageDataUrl,
+        prompt,
+        prompt_strength: strength,
+        num_inference_steps: 25,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Token ${process.env.REPLICATE_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const predictionId = response.data.id;
+  let result;
+
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const check = await axiosClient.get(
+      `https://api.replicate.com/v1/predictions/${predictionId}`,
+      { headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` } }
+    );
+
+    if (check.data.status === 'succeeded') {
+      result = check.data;
+      break;
+    }
+    if (check.data.status === 'failed') {
+      throw new Error(check.data.error || 'Replicate img2img failed');
+    }
+  }
+
+  if (result?.output?.[0]) {
+    const imgResponse = await axiosClient.get(result.output[0], {
+      responseType: 'arraybuffer',
+    });
+    const imageBuffer = Buffer.from(imgResponse.data, 'binary');
+    return {
+      imageUrl: `data:image/png;base64,${imageBuffer.toString('base64')}`,
+      source: 'replicate-img2img',
+    };
+  }
+  throw new Error('Replicate img2img timeout or no output');
+};
+
+const generateImageToImage = async (imageBuffer, prompt, opts = {}) => {
+  const mime = 'image/png';
+  const base64 = imageBuffer.toString('base64');
+  const imageDataUrl = `data:${mime};base64,${base64}`;
+
+  if (process.env.REPLICATE_API_TOKEN) {
+    try {
+      const result = await generateImageToImageReplicate(imageDataUrl, prompt, opts);
+      return { imageUrl: result.imageUrl, provider: result.source };
+    } catch (e) {
+      console.warn('Replicate img2img failed:', e.message);
+    }
+  }
+
+  throw new Error('Image transformation requires REPLICATE_API_TOKEN. Please add it in Render environment variables.');
+};
+
+module.exports = { generateImage, generateImageToImage };

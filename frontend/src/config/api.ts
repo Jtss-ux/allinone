@@ -1,31 +1,26 @@
 // Centralized API configuration
-// Use environment variables for production, fallback to localhost for development
+// Single-backend deploy: set NEXT_PUBLIC_ML_SERVICE_URL = NEXT_PUBLIC_BACKEND_URL
+// so image/audio/img2img go to the Node backend.
+
+const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+const mlUrl = (process.env.NEXT_PUBLIC_ML_SERVICE_URL || 'http://localhost:5001').replace(/\/$/, '');
 
 export const API_CONFIG = {
-  // Main backend API (port 5000)
-  BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000',
-  
-  // ML/AI service API (port 5001)
-  ML_SERVICE_URL: process.env.NEXT_PUBLIC_ML_SERVICE_URL || 'http://localhost:5001',
+  BACKEND_URL: backendUrl,
+  ML_SERVICE_URL: mlUrl,
 };
 
-// Helper function to build backend API URLs
 export const backendApi = (endpoint: string): string => {
-  const baseUrl = API_CONFIG.BACKEND_URL.replace(/\/$/, '');
-  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${path}`;
+  const p = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${API_CONFIG.BACKEND_URL}${p}`;
 };
 
-// Helper function to build ML service API URLs
 export const mlApi = (endpoint: string): string => {
-  const baseUrl = API_CONFIG.ML_SERVICE_URL.replace(/\/$/, '');
-  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${path}`;
+  const p = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${API_CONFIG.ML_SERVICE_URL}${p}`;
 };
 
-// Helper function for ML service asset URLs (for audio/image files)
 export const mlAssetUrl = (assetPath: string): string => {
-  const baseUrl = API_CONFIG.ML_SERVICE_URL.replace(/\/$/, '');
-  const path = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
-  return `${baseUrl}${path}`;
+  const p = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
+  return `${API_CONFIG.ML_SERVICE_URL}${p}`;
 };

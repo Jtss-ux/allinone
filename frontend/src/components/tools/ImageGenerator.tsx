@@ -31,7 +31,7 @@ export default function ImageGenerator() {
       });
       setResult(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to generate image');
+      setError(err.response?.data?.message || err.response?.data?.error || 'Failed to generate image');
     } finally {
       setLoading(false);
     }
@@ -144,8 +144,8 @@ export default function ImageGenerator() {
         )}
 
         {result && !result.success && (
-          <div className="mt-4 p-3 bg-red-900 text-red-100 rounded-lg">
-            {result.error}
+          <div className="mt-4 p-3 bg-red-900/80 text-red-100 rounded-lg text-sm">
+            {result.error || 'Failed to generate image'}
           </div>
         )}
       </div>
