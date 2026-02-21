@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function SoundEffects() {
   const [prompt, setPrompt] = useState('');
@@ -22,7 +22,7 @@ export default function SoundEffects() {
 
     try {
       // Generate audio using TTS with sound effect description
-      const response = await axios.post(mlApi('/api/audio/generate'), {
+      const response = await axios.post(backendApi('/api/audio/generate'), {
         text: `[Sound effect: ${prompt}]`,
         voice: 'en'
       });
@@ -38,7 +38,7 @@ export default function SoundEffects() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 rounded-lg p-8">
         <h3 className="text-xl font-semibold mb-4">Sound Effect Generator</h3>
-        
+
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Describe the Sound Effect</label>
           <textarea
@@ -77,13 +77,13 @@ export default function SoundEffects() {
             {result.audioUrl && (
               <div className="mb-4">
                 <audio controls className="w-full">
-                  <source src={mlAssetUrl(result.audioUrl)} type="audio/mpeg" />
+                  <source src={result.audioUrl} type="audio/mpeg" />
                 </audio>
               </div>
             )}
             {result.audioUrl && (
               <a
-                href={mlAssetUrl(result.audioUrl)}
+                href={result.audioUrl}
                 download={`sound-effect-${result.jobId}.mp3`}
                 className="inline-block w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
               >

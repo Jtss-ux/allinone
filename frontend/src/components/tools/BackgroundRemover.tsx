@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { backendApi, mlApi } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function BackgroundRemover() {
   const [image, setImage] = useState<File | null>(null);
@@ -41,7 +41,7 @@ export default function BackgroundRemover() {
       } catch {
         formData.append('prompt', 'transparent background, white background, clean background');
         formData.append('strength', '0.3');
-        response = await axios.post(mlApi('/api/image/img2img'), formData, {
+        response = await axios.post(backendApi('/api/image/img2img'), formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function AudioGenerator() {
   const [text, setText] = useState('');
@@ -22,7 +22,7 @@ export default function AudioGenerator() {
     setResult(null);
 
     try {
-      const response = await axios.post(mlApi('/api/audio/generate'), {
+      const response = await axios.post(backendApi('/api/audio/generate'), {
         text,
         voice,
       });
@@ -38,7 +38,7 @@ export default function AudioGenerator() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 rounded-lg p-8">
         <h3 className="text-xl font-semibold mb-4">Text to Speech</h3>
-        
+
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Text to Convert to Speech</label>
           <textarea
@@ -87,26 +87,26 @@ export default function AudioGenerator() {
         {result && result.success && (
           <div className="mt-6">
             <h4 className="font-semibold mb-2">✅ Audio Generated</h4>
-            
+
             {result.audioUrl && (
               <div className="mb-4">
                 <audio controls className="w-full">
-                  <source src={mlAssetUrl(result.audioUrl)} type="audio/mpeg" />
+                  <source src={result.audioUrl} type="audio/mpeg" />
                   Your browser does not support the audio element.
                 </audio>
               </div>
             )}
-            
+
             {result.audioUrl && (
               <a
-                href={mlAssetUrl(result.audioUrl)}
+                href={result.audioUrl}
                 download={`ai-audio-${result.jobId}.mp3`}
                 className="inline-block w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition mb-4"
               >
                 ⬇️ Download Audio
               </a>
             )}
-            
+
             <div className="p-3 bg-gray-700 rounded-lg">
               <p className="text-sm text-gray-300">
                 <strong>Job ID:</strong> {result.jobId}

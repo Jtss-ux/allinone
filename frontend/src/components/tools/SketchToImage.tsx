@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function SketchToImage() {
   const [sketch, setSketch] = useState<File | null>(null);
@@ -36,7 +36,7 @@ export default function SketchToImage() {
       formData.append('prompt', prompt || 'a beautiful detailed illustration of the sketch');
       formData.append('strength', '0.85');
 
-      const response = await axios.post(mlApi('/api/image/img2img'), formData, {
+      const response = await axios.post(backendApi('/api/image/img2img'), formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setResult(response.data);

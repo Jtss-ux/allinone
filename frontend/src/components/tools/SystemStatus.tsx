@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { backendApi, mlApi } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 interface LatencyResult {
   backend: number;
@@ -58,7 +58,7 @@ export default function SystemStatus() {
       for (let i = 0; i < 3; i++) {
         const start = performance.now();
         try {
-          await fetch(mlApi('/api/health'), {
+          await fetch(backendApi('/api/health'), {
             method: 'GET',
             mode: 'no-cors'
           });

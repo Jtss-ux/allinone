@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function ImageGenerator() {
   const [prompt, setPrompt] = useState('');
@@ -23,7 +23,7 @@ export default function ImageGenerator() {
     setResult(null);
 
     try {
-      const response = await axios.post(mlApi('/api/image/generate'), {
+      const response = await axios.post(backendApi('/api/image/generate'), {
         prompt,
         negative_prompt: negativePrompt,
         num_inference_steps: steps,
@@ -54,7 +54,7 @@ export default function ImageGenerator() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 rounded-lg p-8">
         <h3 className="text-xl font-semibold mb-4">Generate an Image</h3>
-        
+
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">What do you want to create?</label>
           <textarea
@@ -113,17 +113,17 @@ export default function ImageGenerator() {
         {result && result.success && (
           <div className="mt-6">
             <h4 className="font-semibold mb-2">✅ Generated Image</h4>
-            
+
             {(result.imageUrl || result.imageBase64) && (
               <div className="mb-4">
-                <img 
-                  src={result.imageUrl || result.imageBase64} 
-                  alt="Generated" 
+                <img
+                  src={result.imageUrl || result.imageBase64}
+                  alt="Generated"
                   className="w-full rounded-lg border border-gray-600"
                 />
               </div>
             )}
-            
+
             {(result.imageUrl || result.imageBase64) && (
               <button
                 onClick={handleDownload}
@@ -132,7 +132,7 @@ export default function ImageGenerator() {
                 ⬇️ Download Image
               </button>
             )}
-            
+
             {result.prompt && (
               <div className="p-3 bg-gray-700 rounded-lg">
                 <p className="text-sm text-gray-300">

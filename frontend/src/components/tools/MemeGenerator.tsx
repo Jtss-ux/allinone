@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 interface MemeTemplate {
   id: string;
@@ -64,7 +64,7 @@ export default function MemeGenerator() {
       // Generate image with meme text using AI
       const prompt = `${selectedTemplate.name} meme format: "${topText}" on top, "${bottomText}" on bottom. Classic meme style, white text with black outline, yellow background or original template. Viral meme template.`;
       
-      const response = await axios.post(mlApi('/api/image/generate'), {
+      const response = await axios.post(backendApi('/api/image/generate'), {
         prompt,
         negative_prompt: 'blurry, low quality, distorted, ugly, text overlay, watermark',
         num_inference_steps: 20

@@ -22,11 +22,11 @@ const LTX_API_KEY = process.env.LTX_API_KEY || '';
 const MODELS = {
   // Image Generation - Using a working model
   IMAGE: 'runwayml/stable-diffusion-v1-5',
-  
+
   // Audio Generation
   AUDIO_BARK: 'suno/bark',
   AUDIO_SPEECHT5: 'microsoft/speecht5_tts',
-  
+
   // Video Generation (placeholder - requires more setup)
   VIDEO_ZEROS: 'damo-vilab/text-to-video-ms-1.7b',
 };
@@ -85,7 +85,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/audio/generate', upload.none(), async (req, res) => {
   try {
     const { text, voice = 'alloy' } = req.body;
-    
+
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
@@ -234,97 +234,460 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
     });
   } catch (error) {
     console.error('Audio generation error:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to generate audio',
-      message: error.message 
+      message: error.message
     });
   }
 });
 
-// AI Chat/Assistant using OpenRouter (access to GPT-4, Claude, etc.)
+// =============================================
+// CHAT HELPER — cascading fallback across 7 providers
+// =============================================
+const chatWithFallback = async (messages, preferredModel) => {
+  const systemMsg = messages.find(m => m.role === 'system') || { role: 'system', content: 'You are a helpful AI assistant for AI Content Studio. Provide clear, detailed, and accurate responses.' };
+  const userMsgs = messages.filter(m => m.role !== 'system');
+  const allMessages = [systemMsg, ...userMsgs];
+  const lastUserMsg = userMsgs[userMsgs.length - 1]?.content || '';
+
+  // 1. OpenRouter (many models)
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: preferredModel || 'openai/gpt-3.5-turbo',
+        messages: allMessages,
+        max_tokens: 2048
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://allinone-orcin.vercel.app',
+          'X-Title': 'AI Content Studio'
+        },
+        timeout: 30000
+      });
+      const text = response.data.choices?.[0]?.message?.content;
+      if (text) return { response: text, model: preferredModel || 'openai/gpt-3.5-turbo', provider: 'openrouter' };
+    } catch (e) { console.log('OpenRouter failed:', e.message); }
+  }
+
+  // 2. OpenAI
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-3.5-turbo',
+        messages: allMessages,
+        max_tokens: 2048
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      const text = response.data.choices?.[0]?.message?.content;
+      if (text) return { response: text, model: 'gpt-3.5-turbo', provider: 'openai' };
+    } catch (e) { console.log('OpenAI failed:', e.message); }
+  }
+
+  // 3. Groq (free tier — very fast Llama 3 / Mixtral)
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: 'llama-3.3-70b-versatile',
+        messages: allMessages,
+        max_tokens: 2048
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 15000
+      });
+      const text = response.data.choices?.[0]?.message?.content;
+      if (text) return { response: text, model: 'llama-3.3-70b-versatile', provider: 'groq' };
+    } catch (e) { console.log('Groq failed:', e.message); }
+  }
+
+  // 4. Together AI (free tier)
+  if (process.env.TOGETHER_API_KEY) {
+    try {
+      const response = await axios.post('https://api.together.xyz/v1/chat/completions', {
+        model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free',
+        messages: allMessages,
+        max_tokens: 2048
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.TOGETHER_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      const text = response.data.choices?.[0]?.message?.content;
+      if (text) return { response: text, model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', provider: 'together' };
+    } catch (e) { console.log('Together failed:', e.message); }
+  }
+
+  // 5. DeepInfra (free tier)
+  if (process.env.DEEPINFRA_API_KEY) {
+    try {
+      const response = await axios.post('https://api.deepinfra.com/v1/openai/chat/completions', {
+        model: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
+        messages: allMessages,
+        max_tokens: 2048
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.DEEPINFRA_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      const text = response.data.choices?.[0]?.message?.content;
+      if (text) return { response: text, model: 'meta-llama/Meta-Llama-3.1-8B-Instruct', provider: 'deepinfra' };
+    } catch (e) { console.log('DeepInfra failed:', e.message); }
+  }
+
+  // 6. HuggingFace Inference
+  if (process.env.HUGGING_FACE_API_KEY) {
+    try {
+      const response = await axios.post('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3', {
+        inputs: lastUserMsg,
+        parameters: { max_new_tokens: 1024, return_full_text: false }
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 45000
+      });
+      const text = Array.isArray(response.data) ? response.data[0]?.generated_text : response.data?.generated_text;
+      if (text) return { response: text, model: 'mistralai/Mistral-7B-Instruct-v0.3', provider: 'huggingface' };
+    } catch (e) { console.log('HuggingFace chat failed:', e.message); }
+  }
+
+  // 7. Pollinations AI (completely free, no key required — ultimate fallback)
+  try {
+    const response = await axios.post('https://text.pollinations.ai/', {
+      messages: allMessages,
+      model: 'openai',
+      seed: Date.now()
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 60000
+    });
+    const text = typeof response.data === 'string' ? response.data : response.data?.choices?.[0]?.message?.content || JSON.stringify(response.data);
+    if (text) return { response: text, model: 'pollinations-openai', provider: 'pollinations' };
+  } catch (e) { console.log('Pollinations chat failed:', e.message); }
+
+  throw new Error('All chat providers failed');
+};
+
+// AI Chat/Assistant — 7 providers with cascading fallback
 app.post('/api/chat', upload.none(), async (req, res) => {
   try {
-    const { message, model = 'openai/gpt-3.5-turbo' } = req.body;
-    
-    if (!message) {
+    const { message, model, messages: clientMessages } = req.body;
+
+    if (!message && (!clientMessages || clientMessages.length === 0)) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Try OpenRouter first (has many models)
-    if (process.env.OPENROUTER_API_KEY) {
+    const msgs = clientMessages || [
+      { role: 'system', content: 'You are a helpful AI assistant for AI Content Studio.' },
+      { role: 'user', content: message }
+    ];
+
+    const result = await chatWithFallback(msgs, model);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Chat error:', error.message);
+    res.status(500).json({ error: 'Failed to get AI response', message: error.message });
+  }
+});
+
+// Available models endpoint
+app.get('/api/models', (req, res) => {
+  const models = [];
+  if (process.env.OPENROUTER_API_KEY) {
+    models.push(
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openrouter' },
+      { id: 'openai/gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'openrouter' },
+      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'openrouter' },
+      { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'openrouter' },
+      { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'openrouter' },
+      { id: 'mistralai/mistral-large-latest', name: 'Mistral Large', provider: 'openrouter' },
+      { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'openrouter' }
+    );
+  }
+  if (process.env.OPENAI_API_KEY) {
+    models.push({ id: 'gpt-3.5-turbo', name: 'GPT-3.5 (Direct)', provider: 'openai' });
+  }
+  if (process.env.GROQ_API_KEY) {
+    models.push(
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (Groq)', provider: 'groq' },
+      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (Groq)', provider: 'groq' }
+    );
+  }
+  if (process.env.TOGETHER_API_KEY) {
+    models.push({ id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', name: 'Llama 3.3 70B (Together)', provider: 'together' });
+  }
+  if (process.env.DEEPINFRA_API_KEY) {
+    models.push({ id: 'meta-llama/Meta-Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B (DeepInfra)', provider: 'deepinfra' });
+  }
+  // Always available
+  models.push({ id: 'pollinations-openai', name: 'Free AI (Pollinations)', provider: 'pollinations' });
+  res.json({ success: true, models });
+});
+
+// Code Generation — uses chat fallback with code-specific system prompt
+app.post('/api/code/generate', upload.none(), async (req, res) => {
+  try {
+    const { prompt, language = 'javascript' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const messages = [
+      { role: 'system', content: `You are an expert programmer. Generate clean, well-commented ${language} code. Return ONLY the code wrapped in a markdown code block with the language specified. Do not add explanations outside the code block unless asked.` },
+      { role: 'user', content: prompt }
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, code: result.response, language, provider: result.provider });
+  } catch (error) {
+    console.error('Code generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate code', message: error.message });
+  }
+});
+
+// Translation — free APIs with AI fallback
+app.post('/api/translate', upload.none(), async (req, res) => {
+  try {
+    const { text, sourceLang = 'auto', targetLang = 'es' } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+
+    // 1. Try MyMemory (free, no key)
+    try {
+      const langPair = `${sourceLang === 'auto' ? 'en' : sourceLang}|${targetLang}`;
+      const response = await axios.get(`https://api.mymemory.translated.net/get`, {
+        params: { q: text, langpair: langPair },
+        timeout: 10000
+      });
+      if (response.data?.responseData?.translatedText) {
+        return res.json({
+          success: true,
+          translatedText: response.data.responseData.translatedText,
+          detectedLang: response.data.responseData.detectedLanguage || sourceLang,
+          provider: 'mymemory'
+        });
+      }
+    } catch (e) { console.log('MyMemory failed:', e.message); }
+
+    // 2. Try LibreTranslate (free instance)
+    try {
+      const response = await axios.post('https://libretranslate.com/translate', {
+        q: text,
+        source: sourceLang,
+        target: targetLang,
+        format: 'text'
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      });
+      if (response.data?.translatedText) {
+        return res.json({
+          success: true,
+          translatedText: response.data.translatedText,
+          provider: 'libretranslate'
+        });
+      }
+    } catch (e) { console.log('LibreTranslate failed:', e.message); }
+
+    // 3. Fallback to AI chat
+    const messages = [
+      { role: 'system', content: `You are a professional translator. Translate the following text to ${targetLang}. Return ONLY the translated text, nothing else.` },
+      { role: 'user', content: text }
+    ];
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, translatedText: result.response, provider: `ai-${result.provider}` });
+  } catch (error) {
+    console.error('Translation error:', error.message);
+    res.status(500).json({ error: 'Failed to translate', message: error.message });
+  }
+});
+
+// Music Generation — Replicate MusicGen + HuggingFace fallback
+app.post('/api/music/generate', upload.none(), async (req, res) => {
+  try {
+    const { prompt, duration = 8 } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    // 1. Try Replicate MusicGen
+    if (process.env.REPLICATE_API_TOKEN) {
+      try {
+        const createRes = await axios.post('https://api.replicate.com/v1/predictions', {
+          version: 'meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedbbe',
+          input: {
+            prompt: prompt,
+            duration: Math.min(duration, 30),
+            model_version: 'stereo-melody-large'
+          }
+        }, {
+          headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`, 'Content-Type': 'application/json' },
+          timeout: 15000
+        });
+
+        const predictionId = createRes.data.id;
+        // Poll for result
+        for (let i = 0; i < 60; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const check = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+            headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}` }
+          });
+          if (check.data.status === 'succeeded') {
+            const audioUrl = check.data.output;
+            return res.json({ success: true, audioUrl, prompt, provider: 'replicate-musicgen' });
+          }
+          if (check.data.status === 'failed') break;
+        }
+      } catch (e) { console.log('Replicate MusicGen failed:', e.message); }
+    }
+
+    // 2. Try HuggingFace MusicGen
+    if (process.env.HUGGING_FACE_API_KEY) {
       try {
         const response = await axios.post(
-          'https://openrouter.ai/api/v1/chat/completions',
+          'https://api-inference.huggingface.co/models/facebook/musicgen-small',
+          { inputs: prompt },
           {
-            model: model,
-            messages: [
-              { role: 'system', content: 'You are a helpful AI assistant for AI Content Studio.' },
-              { role: 'user', content: message }
-            ],
-            max_tokens: 1000
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://allinone-orcin.vercel.app',
-              'X-Title': 'AI Content Studio'
-            }
+            headers: { 'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`, 'Content-Type': 'application/json' },
+            responseType: 'arraybuffer',
+            timeout: 60000
           }
         );
-
-        res.json({
+        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+        return res.json({
           success: true,
-          response: response.data.choices[0].message.content,
-          model: model,
-          provider: 'openrouter'
+          audioUrl: `data:audio/wav;base64,${base64Audio}`,
+          prompt,
+          provider: 'huggingface-musicgen'
         });
-        return;
-      } catch (openrouterError) {
-        console.log('OpenRouter chat failed:', openrouterError.message);
+      } catch (e) { console.log('HuggingFace MusicGen failed:', e.message); }
+    }
+
+    res.status(503).json({ success: false, error: 'Music generation requires REPLICATE_API_TOKEN or HUGGING_FACE_API_KEY' });
+  } catch (error) {
+    console.error('Music generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate music', message: error.message });
+  }
+});
+
+// PPT/Presentation Generation — creates structured slides from a topic
+app.post('/api/ppt/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, numSlides = 8, template = 'modern-dark', customInstructions = '' } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an expert presentation designer. Generate a professional presentation with exactly ${numSlides} slides.
+
+Return ONLY valid JSON in this exact format (no markdown, no code blocks, just the JSON):
+{"slides":[{"title":"Slide Title","content":["Point 1","Point 2","Point 3"],"notes":"Speaker notes here","layout":"centered"}]}
+
+Rules:
+- First slide should be a title slide with the main topic
+- Last slide should be a "Thank You / Q&A" slide
+- Each slide should have 3-5 bullet points
+- Keep bullet points concise (under 15 words each)
+- Notes should contain what the speaker should say (1-2 sentences)
+- Layout can be: "centered", "two-column", "diagram", "timeline", "comparison"
+${customInstructions ? `\nAdditional instructions: ${customInstructions}` : ''}`
+      },
+      { role: 'user', content: `Create a ${numSlides}-slide presentation about: ${topic}` }
+    ];
+
+    const result = await chatWithFallback(messages);
+
+    // Parse the JSON response
+    let slides;
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = result.response.match(/\{[\s\S]*"slides"[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        slides = parsed.slides;
+      } else {
+        throw new Error('No valid JSON found in response');
+      }
+    } catch (parseErr) {
+      // If parsing fails, create structured slides from the text
+      const lines = result.response.split('\n').filter(l => l.trim());
+      slides = [];
+      let currentSlide = { title: topic, content: [], notes: '', layout: 'centered' };
+      for (const line of lines) {
+        if (line.match(/^#{1,3}\s/) || line.match(/^Slide \d/i)) {
+          if (currentSlide.content.length > 0) {
+            slides.push(currentSlide);
+            currentSlide = { title: line.replace(/^#{1,3}\s*/, '').replace(/^Slide \d+:?\s*/i, ''), content: [], notes: '', layout: 'centered' };
+          } else {
+            currentSlide.title = line.replace(/^#{1,3}\s*/, '').replace(/^Slide \d+:?\s*/i, '');
+          }
+        } else if (line.match(/^[-•*]\s/) || line.match(/^\d+\.\s/)) {
+          currentSlide.content.push(line.replace(/^[-•*\d.]\s*/, ''));
+        }
+      }
+      if (currentSlide.content.length > 0 || slides.length === 0) {
+        slides.push(currentSlide);
       }
     }
 
-    // Fallback to OpenAI
-    if (process.env.OPENAI_API_KEY) {
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a helpful AI assistant for AI Content Studio.' },
-            { role: 'user', content: message }
-          ],
-          max_tokens: 1000
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      res.json({
-        success: true,
-        response: response.data.choices[0].message.content,
-        model: 'gpt-3.5-turbo',
-        provider: 'openai'
-      });
-      return;
-    }
-
-    res.status(503).json({
-      success: false,
-      error: 'AI chat requires API key',
-      message: 'Please add OPENROUTER_API_KEY or OPENAI_API_KEY to environment variables'
-    });
+    res.json({ success: true, slides, topic, template, provider: result.provider });
   } catch (error) {
-    console.error('Chat error:', error.message);
-    res.status(500).json({ 
-      error: 'Failed to get AI response',
-      message: error.message 
-    });
+    console.error('PPT generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate presentation', message: error.message });
+  }
+});
+
+// Email Writer — AI-powered email composition
+app.post('/api/email/generate', upload.none(), async (req, res) => {
+  try {
+    const { purpose, tone = 'professional', recipient = '', context = '' } = req.body;
+    if (!purpose) return res.status(400).json({ error: 'Email purpose is required' });
+
+    const messages = [
+      { role: 'system', content: `You are an expert email writer. Write a ${tone} email. Include subject line at the top formatted as "Subject: ...". Write the full email body. Be concise and appropriate for the context.` },
+      { role: 'user', content: `Write an email ${recipient ? `to ${recipient}` : ''}: ${purpose}${context ? `. Context: ${context}` : ''}` }
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, email: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Email generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate email', message: error.message });
+  }
+});
+
+// Hashtag Generator — generates relevant hashtags
+app.post('/api/hashtags/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, platform = 'instagram', count = 30 } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const messages = [
+      { role: 'system', content: `You are a social media expert. Generate exactly ${count} relevant hashtags for ${platform}. Return ONLY the hashtags, each starting with #, separated by spaces. Mix popular high-reach hashtags with niche-specific ones. No explanations, just hashtags.` },
+      { role: 'user', content: `Generate hashtags for: ${topic}` }
+    ];
+
+    const result = await chatWithFallback(messages);
+    const hashtags = result.response.match(/#\w+/g) || [];
+    res.json({ success: true, hashtags, rawText: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Hashtag generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate hashtags', message: error.message });
+  }
+});
+
+// AI Content Writer — articles, stories, blog posts
+app.post('/api/content/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, type = 'blog post', tone = 'informative', length = 'medium' } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const lengthGuide = { short: '200-300 words', medium: '500-700 words', long: '1000-1500 words' };
+    const messages = [
+      { role: 'system', content: `You are an expert content writer. Write a ${tone} ${type} of ${lengthGuide[length] || '500-700 words'}. Use proper formatting with headings, paragraphs, and engaging language. Make it original and insightful.` },
+      { role: 'user', content: `Write about: ${topic}` }
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, content: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Content generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate content', message: error.message });
   }
 });
 
@@ -332,7 +695,7 @@ app.post('/api/chat', upload.none(), async (req, res) => {
 app.post('/api/text/summarize', upload.none(), async (req, res) => {
   try {
     const { text } = req.body;
-    
+
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
@@ -399,9 +762,9 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
     });
   } catch (error) {
     console.error('Summarization error:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to summarize text',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -468,9 +831,9 @@ app.post('/api/image/remove-background', upload.single('image'), async (req, res
       fs.unlinkSync(req.file.path);
     }
     console.error('Background removal error:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to remove background',
-      message: error.message 
+      message: error.message
     });
   }
 });
@@ -479,7 +842,7 @@ app.post('/api/image/remove-background', upload.single('image'), async (req, res
 app.post('/api/video/generate', upload.none(), async (req, res) => {
   try {
     const { prompt, duration = 5 } = req.body;
-    
+
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
@@ -761,7 +1124,7 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
 
   } catch (error) {
     console.error('All video generation APIs failed:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'All video generation services failed',
       message: 'Please try again or check API keys'
     });
@@ -772,7 +1135,7 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
 app.get('/api/video/status/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     if (!process.env.LTX_API_KEY) {
       return res.status(503).json({ error: 'LTX API not configured' });
     }
@@ -794,9 +1157,9 @@ app.get('/api/video/status/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Video status check error:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to check video status',
-      message: error.message 
+      message: error.message
     });
   }
 });

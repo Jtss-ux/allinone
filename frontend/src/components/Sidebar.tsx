@@ -66,6 +66,23 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'password-generator', label: 'Password Generator 🔐', icon: '🔐' },
         { id: 'lorem-ipsum', label: 'Lorem Ipsum 📝', icon: '📝' },
         { id: 'regex-tester', label: 'Regex Tester 🔍', icon: '🔍' },
+        { id: 'markdown-editor', label: 'Markdown Editor 📝', icon: '📝' },
+        { id: 'translator', label: 'Translator 🌐', icon: '🌐' },
+        { id: 'css-gradient', label: 'CSS Gradient 🎨', icon: '🎨' },
+        { id: 'typing-test', label: 'Typing Test ⌨️', icon: '⌨️' },
+        { id: 'cyberchef', label: 'CyberChef 🔧', icon: '🔧' },
+        { id: 'text-diff', label: 'Text Diff 📝', icon: '📝' },
+        { id: 'speed-test', label: 'Speed Test 🌐', icon: '🌐' },
+        { id: 'pastebin', label: 'Pastebin 📋', icon: '📋' },
+        { id: 'wayback-machine', label: 'Wayback Machine 🕰️', icon: '🕰️' },
+        { id: 'exif-viewer', label: 'EXIF Viewer 📷', icon: '📷' },
+        { id: 'breach-checker', label: 'Breach Checker 🔐', icon: '🔐' },
+      ],
+    },
+    {
+      category: 'MEDIA',
+      tools: [
+        { id: 'media-explorer', label: 'Media Explorer 🎬', icon: '🎬' },
       ],
     },
     {
@@ -87,12 +104,18 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'snake', label: 'Snake 🐍', icon: '🐍' },
         { id: 'tetris', label: 'Tetris 🧱', icon: '🧱' },
         { id: 'game-2048', label: '2048 🔢', icon: '🔢' },
+        { id: 'gaming-directory', label: 'Gaming Directory 🕹️', icon: '🕹️' },
       ],
     },
     {
       category: 'AI ASSISTANT',
       tools: [
         { id: 'jarvis', label: 'J.A.R.V.I.S. 🤖', icon: '🤖' },
+        { id: 'code-generator', label: 'Code Generator 💻', icon: '💻' },
+        { id: 'ai-writer', label: 'AI Writer ✍️', icon: '✍️' },
+        { id: 'email-writer', label: 'Email Writer 📧', icon: '📧' },
+        { id: 'ppt-generator', label: 'PPT Generator 📊', icon: '📊' },
+        { id: 'hashtag-generator', label: 'Hashtag Generator #️⃣', icon: '#️⃣' },
       ],
     },
     {
@@ -106,6 +129,17 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'sketch-to-image', label: 'Sketch to Image', icon: '🎨' },
         { id: 'meme-generator', label: 'Meme Generator 🧠', icon: '🧠' },
         { id: 'image-tool', label: 'Image Tools 🛠️', icon: '🛠️' },
+        { id: 'image-compressor', label: 'Image Compressor 🗜️', icon: '🗜️' },
+      ],
+    },
+    {
+      category: 'HUBS',
+      tools: [
+        { id: 'self-hosting-hub', label: 'Self-Hosting 🏠', icon: '🏠' },
+        { id: 'media-hub', label: 'Media & Movies 🎬', icon: '🎬' },
+        { id: 'privacy-hub', label: 'Privacy & Security 🛡️', icon: '🛡️' },
+        { id: 'business-hub', label: 'Business & Analytics 💼', icon: '💼' },
+        { id: 'converter-hub', label: 'Converters & Files 🔄', icon: '🔄' },
       ],
     },
   ];
@@ -127,11 +161,10 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
               <button
                 key={tool.id}
                 onClick={() => onSectionChange(tool.id)}
-                className={`w-full text-left px-6 py-3 text-sm font-medium transition ${
-                  currentSection === tool.id
-                    ? 'bg-green-600 text-white'
-                    : 'text-gray-300 hover:text-white hover:bg-gray-800'
-                }`}
+                className={`w-full text-left px-6 py-3 text-sm font-medium transition ${currentSection === tool.id
+                  ? 'bg-green-600 text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                  }`}
               >
                 <span className="mr-3">{tool.icon}</span>
                 {tool.label}

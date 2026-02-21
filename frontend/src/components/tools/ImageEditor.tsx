@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function ImageEditor() {
   const [prompt, setPrompt] = useState('');
@@ -41,7 +41,7 @@ export default function ImageEditor() {
       formData.append('image', image);
       formData.append('strength', strength.toString());
 
-      const response = await axios.post(mlApi('/api/image/img2img'), formData, {
+      const response = await axios.post(backendApi('/api/image/img2img'), formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setResult(response.data);

@@ -51,6 +51,30 @@ import Calendar from './tools/Calendar';
 import PasswordGenerator from './tools/PasswordGenerator';
 import LoremIpsumGenerator from './tools/LoremIpsumGenerator';
 import RegexTester from './tools/RegexTester';
+import CodeGenerator from './tools/CodeGenerator';
+import Translator from './tools/Translator';
+import MarkdownEditor from './tools/MarkdownEditor';
+import PPTGenerator from './tools/PPTGenerator';
+import AIWriter from './tools/AIWriter';
+import EmailWriter from './tools/EmailWriter';
+import HashtagGenerator from './tools/HashtagGenerator';
+import CSSGradientGenerator from './tools/CSSGradientGenerator';
+import TypingSpeedTest from './tools/TypingSpeedTest';
+import MediaExplorer from './tools/MediaExplorer';
+import CyberChef from './tools/CyberChef';
+import TextDiff from './tools/TextDiff';
+import SpeedTest from './tools/SpeedTest';
+import EXIFViewer from './tools/EXIFViewer';
+import ImageCompressor from './tools/ImageCompressor';
+import Pastebin from './tools/Pastebin';
+import BreachChecker from './tools/BreachChecker';
+import WaybackMachine from './tools/WaybackMachine';
+import SelfHostingHub from './tools/SelfHostingHub';
+import MediaHub from './tools/MediaHub';
+import GamingDirectory from './tools/GamingDirectory';
+import PrivacyHub from './tools/PrivacyHub';
+import BusinessHub from './tools/BusinessHub';
+import ConverterHub from './tools/ConverterHub';
 
 interface DashboardProps {
   section: string;
@@ -117,6 +141,54 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <LoremIpsumGenerator />;
       case 'regex-tester':
         return <RegexTester />;
+      case 'code-generator':
+        return <CodeGenerator />;
+      case 'translator':
+        return <Translator />;
+      case 'markdown-editor':
+        return <MarkdownEditor />;
+      case 'ppt-generator':
+        return <PPTGenerator />;
+      case 'ai-writer':
+        return <AIWriter />;
+      case 'email-writer':
+        return <EmailWriter />;
+      case 'hashtag-generator':
+        return <HashtagGenerator />;
+      case 'css-gradient':
+        return <CSSGradientGenerator />;
+      case 'typing-test':
+        return <TypingSpeedTest />;
+      case 'media-explorer':
+        return <MediaExplorer />;
+      case 'cyberchef':
+        return <CyberChef />;
+      case 'text-diff':
+        return <TextDiff />;
+      case 'speed-test':
+        return <SpeedTest />;
+      case 'exif-viewer':
+        return <EXIFViewer />;
+      case 'image-compressor':
+        return <ImageCompressor />;
+      case 'pastebin':
+        return <Pastebin />;
+      case 'breach-checker':
+        return <BreachChecker />;
+      case 'wayback-machine':
+        return <WaybackMachine />;
+      case 'self-hosting-hub':
+        return <SelfHostingHub />;
+      case 'media-hub':
+        return <MediaHub />;
+      case 'gaming-directory':
+        return <GamingDirectory />;
+      case 'privacy-hub':
+        return <PrivacyHub />;
+      case 'business-hub':
+        return <BusinessHub />;
+      case 'converter-hub':
+        return <ConverterHub />;
 
       // Image tools
       case 'image-generator':
@@ -137,7 +209,7 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <IconGenerator />;
       case 'variations':
         return <ImageEditor />;
-      
+
       // Video tools
       case 'video-generator':
         return <VideoGenerator />;
@@ -149,7 +221,7 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <VideoUpscaler />;
       case 'lip-sync':
         return <LipSync />;
-      
+
       // Audio tools
       case 'voice-generator':
         return <AudioGenerator />;
@@ -157,7 +229,7 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <SoundEffects />;
       case 'music-generator':
         return <MusicGenerator />;
-      
+
       // Other tools
       case 'spaces':
         return <Spaces />;
@@ -169,7 +241,7 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <ChangeCamera />;
       case 'system-status':
         return <SystemStatus />;
-      
+
       default:
         return <DefaultTool toolName={section} />;
     }

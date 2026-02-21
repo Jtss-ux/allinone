@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function DesignEditor() {
   const [prompt, setPrompt] = useState('');
@@ -23,7 +23,7 @@ export default function DesignEditor() {
 
     try {
       const fullPrompt = `${prompt}, ${style} design, graphic design, clean, professional, high quality`;
-      const response = await axios.post(mlApi('/api/image/generate'), {
+      const response = await axios.post(backendApi('/api/image/generate'), {
         prompt: fullPrompt,
         negative_prompt: 'blurry, low quality, distorted, ugly',
         num_inference_steps: 20

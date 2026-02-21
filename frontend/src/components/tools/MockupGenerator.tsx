@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function MockupGenerator() {
   const [product, setProduct] = useState('');
@@ -23,7 +23,7 @@ export default function MockupGenerator() {
 
     try {
       const prompt = `${product}, ${context}, product photography, professional mockup, clean background, high quality, commercial photography`;
-      const response = await axios.post(mlApi('/api/image/generate'), {
+      const response = await axios.post(backendApi('/api/image/generate'), {
         prompt,
         negative_prompt: 'blurry, low quality, distorted, ugly, watermark, text',
         num_inference_steps: 25

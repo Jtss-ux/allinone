@@ -2,12 +2,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+}
+
+interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
 }
 
 interface JarvisCapability {
@@ -32,7 +38,7 @@ export default function JarvisAI() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: "Hello, I'm JARVIS - your AI assistant. How may I assist you today?",
+      content: "Hello, I'm JARVIS — your AI assistant powered by multiple AI models. How may I assist you today?",
       timestamp: new Date(),
     },
   ]);
@@ -40,6 +46,8 @@ export default function JarvisAI() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeMode, setActiveMode] = useState('chat');
   const [isListening, setIsListening] = useState(false);
+  const [models, setModels] = useState<AIModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -51,6 +59,36 @@ export default function JarvisAI() {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch available models on mount
+  useEffect(() => {
+    axios.get(backendApi('/api/models'))
+      .then(res => {
+        if (res.data.models) {
+          setModels(res.data.models);
+          if (res.data.models.length > 0) {
+            setSelectedModel(res.data.models[0].id);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback — always show Pollinations
+        setModels([{ id: 'pollinations-openai', name: 'Free AI (Pollinations)', provider: 'pollinations' }]);
+        setSelectedModel('pollinations-openai');
+      });
+  }, []);
+
+  const buildSystemPrompt = (): string => {
+    const modePrompts: Record<string, string> = {
+      chat: 'You are JARVIS, a highly capable AI assistant. Provide clear, detailed, helpful responses.',
+      code: 'You are JARVIS, an expert programming assistant. Write clean, well-commented code. When generating code, wrap it in markdown code blocks with the language specified.',
+      analysis: 'You are JARVIS, a data analysis expert. Help analyze data, explain statistics, and suggest visualizations.',
+      writing: 'You are JARVIS, a professional writing assistant. Help with drafting, editing, and improving written content.',
+      translation: 'You are JARVIS, a professional translator. Translate text accurately while preserving meaning and tone.',
+      math: 'You are JARVIS, a mathematics expert. Solve problems step by step, showing your work clearly.',
+    };
+    return modePrompts[activeMode] || modePrompts.chat;
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -61,38 +99,70 @@ export default function JarvisAI() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const userInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      // Try to connect to the ML service for AI response
       let aiResponse = '';
-      
+
       if (activeMode === 'image') {
-        // Use image generation
-        const response = await axios.post(mlApi('/api/image/generate'), {
-          prompt: input,
+        // Use image generation endpoint
+        const response = await axios.post(backendApi('/api/image/generate'), {
+          prompt: userInput,
           num_inference_steps: 20,
         });
-        if (response.data.success && response.data.imageBase64) {
-          aiResponse = `I've generated an image based on your description:\n\n![Generated Image](${response.data.imageBase64})\n\nYou can download it using the link below.`;
+        if (response.data.success && response.data.imageUrl) {
+          aiResponse = `I've generated an image based on your description. Here it is:\n\n[Image generated successfully — provider: ${response.data.provider || 'unknown'}]`;
+          // Could render the image separately
         } else {
-          aiResponse = "I'm sorry, I couldn't generate the image at the moment. Please try again.";
+          aiResponse = "I couldn't generate the image right now. Please try again.";
         }
       } else if (activeMode === 'voice') {
-        // Use voice generation
-        const response = await axios.post(mlApi('/api/audio/generate'), {
-          text: input,
-          voice: 'en',
+        // Text-to-speech
+        const response = await axios.post(backendApi('/api/audio/generate'), {
+          text: userInput,
+          voice: 'alloy',
         });
         if (response.data.success) {
-          aiResponse = `I've converted your text to speech. You can listen to it below.`;
+          aiResponse = `I've converted your text to speech using ${response.data.provider || 'TTS'}. You can listen to the audio above.`;
         } else {
-          aiResponse = "I'm sorry, I couldn't generate the audio at the moment.";
+          aiResponse = "I couldn't generate the audio right now. Please try again.";
+        }
+      } else if (activeMode === 'translation') {
+        // Use translation endpoint
+        const response = await axios.post(backendApi('/api/translate'), {
+          text: userInput,
+          sourceLang: 'auto',
+          targetLang: 'es',
+        });
+        if (response.data.success) {
+          aiResponse = `**Translation (${response.data.provider}):**\n\n${response.data.translatedText}`;
+        } else {
+          aiResponse = "Translation failed. Please try again.";
         }
       } else {
-        // General chat response
-        aiResponse = generateResponse(input, activeMode);
+        // General chat — use the real backend with selected model
+        const chatMessages = [
+          { role: 'system', content: buildSystemPrompt() },
+          ...messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10).map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+          { role: 'user', content: userInput },
+        ];
+
+        const response = await axios.post(backendApi('/api/chat'), {
+          message: userInput,
+          model: selectedModel,
+          messages: chatMessages,
+        });
+
+        if (response.data.success) {
+          aiResponse = response.data.response;
+        } else {
+          aiResponse = "I couldn't process your request. Please try again.";
+        }
       }
 
       const assistantMessage: Message = {
@@ -102,10 +172,11 @@ export default function JarvisAI() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch (error: any) {
+      // Offline fallback
       const errorMessage: Message = {
         role: 'assistant',
-        content: generateResponse(input, activeMode),
+        content: `⚠️ Could not reach the AI backend. Error: ${error.message || 'Connection failed'}. Please check that the backend is running.`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -114,65 +185,11 @@ export default function JarvisAI() {
     setIsLoading(false);
   };
 
-  const generateResponse = (userInput: string, mode: string): string => {
-    const input = userInput.toLowerCase();
-    
-    // Code assistant mode
-    if (mode === 'code' || input.includes('code') || input.includes('programming')) {
-      if (input.includes('python')) {
-        return "I can help you with Python! Here's a sample:\n\n```python\ndef hello_world():\n    print('Hello, World!')\n    \nhello_world()\n```\n\nWould you like me to explain this code or help with something specific?";
-      } else if (input.includes('javascript') || input.includes('js')) {
-        return "Here's a JavaScript example:\n\n```javascript\nconst greeting = () => {\n  console.log('Hello, World!');\n};\n\ngreeting();\n```\n\nWhat would you like to build?";
-      } else {
-        return "I can help you write and debug code in various languages including Python, JavaScript, TypeScript, HTML, CSS, and more. What would you like to work on?";
-      }
-    }
-
-    // Math mode
-    if (mode === 'math' || input.includes('calculate') || input.includes('math')) {
-      return "I can help you solve mathematical problems! I can handle algebra, calculus, statistics, and more. What problem would you like me to solve?";
-    }
-
-    // Writing mode
-    if (mode === 'writing') {
-      return "I'll help you with your writing! Whether it's an essay, email, story, or any other text, I can assist with drafting, editing, and improving your content. What are you working on?";
-    }
-
-    // Translation mode
-    if (mode === 'translation') {
-      return "I can translate text between many languages. Just tell me what language you'd like to translate to, and provide the text!";
-    }
-
-    // General chat responses
-    if (input.includes('hello') || input.includes('hi')) {
-      return "Hello! I'm JARVIS, ready to assist you with a wide range of tasks. I can help with coding, image generation, data analysis, writing, translations, and much more. What would you like to work on?";
-    }
-
-    if (input.includes('time')) {
-      return `The current time is ${new Date().toLocaleTimeString()}.`;
-    }
-
-    if (input.includes('date')) {
-      return `Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`;
-    }
-
-    if (input.includes('weather')) {
-      return "I don't have access to real-time weather data, but I can help you find weather APIs or build a weather application!";
-    }
-
-    if (input.includes('help')) {
-      return "I can help you with:\n\n• **Coding** - Write, debug, and explain code\n• **Image Generation** - Create images from text\n• **Voice Generation** - Convert text to speech\n• **Writing** - Essays, emails, stories\n• **Math** - Solve equations and problems\n• **Translation** - Translate between languages\n• **Data Analysis** - Process and visualize data\n\nJust let me know what you need!";
-    }
-
-    // Default response
-    return "I'm processing your request. As JARVIS, I have access to various AI capabilities including code generation, image creation, voice synthesis, and more. How can I assist you further with this topic?";
-  };
-
   const startVoiceRecognition = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       const recognition = new SpeechRecognition();
-      
+
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = 'en-US';
@@ -203,18 +220,49 @@ export default function JarvisAI() {
     }
   };
 
+  const clearChat = () => {
+    setMessages([{
+      role: 'assistant',
+      content: "Chat cleared. How can I help you?",
+      timestamp: new Date(),
+    }]);
+  };
+
   return (
     <div className="max-w-5xl mx-auto h-[calc(100vh-140px)]">
       <div className="bg-gray-800 rounded-lg overflow-hidden h-full flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl">
-              🤖
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl">
+                🤖
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold">J.A.R.V.I.S.</h3>
+                <p className="text-sm text-gray-200">Just A Rather Very Intelligent System</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold">J.A.R.V.I.S.</h3>
-              <p className="text-sm text-gray-200">Just A Rather Very Intelligent System</p>
+            <div className="flex items-center gap-2">
+              {/* Model selector */}
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="bg-blue-700 text-white text-sm rounded px-2 py-1.5 border border-blue-500 focus:outline-none"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={clearChat}
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 rounded text-sm transition"
+                title="Clear chat"
+              >
+                🗑️
+              </button>
             </div>
           </div>
         </div>
@@ -231,11 +279,10 @@ export default function JarvisAI() {
                   <button
                     key={cap.id}
                     onClick={() => setActiveMode(cap.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${
-                      activeMode === cap.id
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${activeMode === cap.id
                         ? 'bg-blue-600 text-white'
                         : 'text-gray-300 hover:bg-gray-800'
-                    }`}
+                      }`}
                   >
                     <span className="text-xl">{cap.icon}</span>
                     <div>
@@ -255,27 +302,24 @@ export default function JarvisAI() {
               {messages.map((message, index) => (
                 <div
                   key={index}
-                  className={`flex gap-3 ${
-                    message.role === 'user' ? 'flex-row-reverse' : ''
-                  }`}
+                  className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''
+                    }`}
                 >
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                      message.role === 'user'
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0 ${message.role === 'user'
                         ? 'bg-blue-600'
                         : 'bg-gradient-to-r from-cyan-500 to-blue-500'
-                    }`}
+                      }`}
                   >
                     {message.role === 'user' ? '👤' : '🤖'}
                   </div>
                   <div
-                    className={`max-w-[70%] p-4 rounded-2xl ${
-                      message.role === 'user'
+                    className={`max-w-[70%] p-4 rounded-2xl ${message.role === 'user'
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 text-gray-100'
-                    }`}
+                      }`}
                   >
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className="whitespace-pre-wrap break-words">{message.content}</div>
                     <div className="text-xs opacity-50 mt-2">
                       {message.timestamp.toLocaleTimeString()}
                     </div>
@@ -304,9 +348,8 @@ export default function JarvisAI() {
               <div className="flex gap-2">
                 <button
                   onClick={startVoiceRecognition}
-                  className={`p-3 rounded-lg transition ${
-                    isListening ? 'bg-red-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
+                  className={`p-3 rounded-lg transition ${isListening ? 'bg-red-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
                   title="Voice Input"
                 >
                   {isListening ? '🔴' : '🎤'}
@@ -329,7 +372,7 @@ export default function JarvisAI() {
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-2 text-center">
-                Press Enter to send • Shift+Enter for new line
+                Press Enter to send • Shift+Enter for new line • Model: {models.find(m => m.id === selectedModel)?.name || 'Auto'}
               </div>
             </div>
           </div>

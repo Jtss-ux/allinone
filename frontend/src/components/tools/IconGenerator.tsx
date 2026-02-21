@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function IconGenerator() {
   const [prompt, setPrompt] = useState('');
@@ -21,7 +21,7 @@ export default function IconGenerator() {
     setResult(null);
 
     try {
-      const response = await axios.post(mlApi('/api/image/generate'), {
+      const response = await axios.post(backendApi('/api/image/generate'), {
         prompt: `${prompt}, icon, flat design, simple, minimal, vector style, transparent background, square format`,
         negative_prompt: 'blurry, complex, detailed, photograph, 3d',
         num_inference_steps: 20

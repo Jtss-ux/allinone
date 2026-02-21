@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 export default function SkinEnhancer() {
   const [image, setImage] = useState<File | null>(null);
@@ -36,7 +36,7 @@ export default function SkinEnhancer() {
       formData.append('prompt', 'smooth skin, perfect complexion, clear skin, beautiful skin, professional portrait retouching, enhanced skin texture');
       formData.append('strength', enhancement.toString());
 
-      const response = await axios.post(mlApi('/api/image/img2img'), formData, {
+      const response = await axios.post(backendApi('/api/image/img2img'), formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setResult(response.data);

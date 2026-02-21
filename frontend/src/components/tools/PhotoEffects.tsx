@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import { mlApi, mlAssetUrl } from '@/config/api';
+import { backendApi } from '@/config/api';
 
 interface EffectPreset {
   id: string;
@@ -96,7 +96,7 @@ export default function PhotoEffects() {
       formData.append('prompt', prompt);
       formData.append('strength', (Math.max(grain, sepia, vignette) / 100 * 0.5 + 0.3).toString());
 
-      const response = await axios.post(mlApi('/api/image/img2img'), formData, {
+      const response = await axios.post(backendApi('/api/image/img2img'), formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setResult(response.data);
