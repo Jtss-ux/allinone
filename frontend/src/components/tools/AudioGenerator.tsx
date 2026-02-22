@@ -81,7 +81,7 @@ export default function AudioGenerator() {
           disabled={loading}
           className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? '🔊 Generating Audio...' : 'Generate Audio'}
+          {loading ? '🔊 Racing TTS providers...' : 'Generate Audio'}
         </button>
 
         {result && result.success && (
@@ -107,7 +107,7 @@ export default function AudioGenerator() {
               </a>
             )}
 
-            <div className="p-3 bg-gray-700 rounded-lg">
+            <div className="p-3 bg-gray-700 rounded-lg space-y-1">
               <p className="text-sm text-gray-300">
                 <strong>Job ID:</strong> {result.jobId}
               </p>
@@ -117,6 +117,14 @@ export default function AudioGenerator() {
               <p className="text-sm text-gray-300">
                 <strong>Language:</strong> {result.voice}
               </p>
+              {result.provider && (
+                <p className="text-sm text-gray-300">
+                  <strong>Model:</strong>{' '}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                    🤖 {result.provider}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
         )}

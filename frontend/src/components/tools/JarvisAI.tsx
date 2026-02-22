@@ -159,7 +159,8 @@ export default function JarvisAI() {
         });
 
         if (response.data.success) {
-          aiResponse = response.data.response;
+          const providerTag = response.data.provider ? `\n\n_— via ${response.data.provider}${response.data.model ? ` (${response.data.model})` : ''}_` : '';
+          aiResponse = response.data.response + providerTag;
         } else {
           aiResponse = "I couldn't process your request. Please try again.";
         }
@@ -280,8 +281,8 @@ export default function JarvisAI() {
                     key={cap.id}
                     onClick={() => setActiveMode(cap.id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${activeMode === cap.id
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-800'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-300 hover:bg-gray-800'
                       }`}
                   >
                     <span className="text-xl">{cap.icon}</span>
@@ -307,16 +308,16 @@ export default function JarvisAI() {
                 >
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0 ${message.role === 'user'
-                        ? 'bg-blue-600'
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                      ? 'bg-blue-600'
+                      : 'bg-gradient-to-r from-cyan-500 to-blue-500'
                       }`}
                   >
                     {message.role === 'user' ? '👤' : '🤖'}
                   </div>
                   <div
                     className={`max-w-[70%] p-4 rounded-2xl ${message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-100'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-100'
                       }`}
                   >
                     <div className="whitespace-pre-wrap break-words">{message.content}</div>

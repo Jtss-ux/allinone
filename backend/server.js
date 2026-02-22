@@ -541,7 +541,7 @@ app.post('/api/translate', upload.none(), async (req, res) => {
   }
 });
 
-// Music Generation — Replicate MusicGen + HuggingFace fallback
+// Music Generation — 3 providers: Replicate, HuggingFace, Fal.ai
 app.post('/api/music/generate', upload.none(), async (req, res) => {
   try {
     const { prompt, duration = 8 } = req.body;
@@ -563,7 +563,6 @@ app.post('/api/music/generate', upload.none(), async (req, res) => {
         });
 
         const predictionId = createRes.data.id;
-        // Poll for result
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 2000));
           const check = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
@@ -600,7 +599,28 @@ app.post('/api/music/generate', upload.none(), async (req, res) => {
       } catch (e) { console.log('HuggingFace MusicGen failed:', e.message); }
     }
 
-    res.status(503).json({ success: false, error: 'Music generation requires REPLICATE_API_TOKEN or HUGGING_FACE_API_KEY' });
+    // 3. Try Fal.ai MusicGen
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://queue.fal.run/fal-ai/stable-audio',
+          {
+            prompt,
+            seconds_total: Math.min(duration, 30),
+          },
+          {
+            headers: { 'Authorization': `Key ${process.env.FAL_KEY || process.env.FAL_API_KEY}`, 'Content-Type': 'application/json' },
+            timeout: 60000
+          }
+        );
+        const audioUrl = response.data?.audio_file?.url;
+        if (audioUrl) {
+          return res.json({ success: true, audioUrl, prompt, provider: 'fal-stable-audio' });
+        }
+      } catch (e) { console.log('Fal.ai music failed:', e.message); }
+    }
+
+    res.status(503).json({ success: false, error: 'Music generation requires REPLICATE_API_TOKEN, HUGGING_FACE_API_KEY, or FAL_KEY' });
   } catch (error) {
     console.error('Music generation error:', error.message);
     res.status(500).json({ error: 'Failed to generate music', message: error.message });
@@ -734,7 +754,7 @@ app.post('/api/content/generate', upload.none(), async (req, res) => {
   }
 });
 
-// RapidAPI - Text Summarization
+// Text Summarization — RapidAPI + chatWithFallback (7 providers)
 app.post('/api/text/summarize', upload.none(), async (req, res) => {
   try {
     const { text } = req.body;
@@ -743,141 +763,165 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
+    // 1. Try RapidAPI summarizer
     if (process.env.RAPIDAPI_KEY) {
       try {
         const response = await axios.post(
           'https://gpt-summarization.p.rapidapi.com/summarize',
-          {
-            text: text,
-            num_sentences: 3
-          },
+          { text: text, num_sentences: 3 },
           {
             headers: {
               'content-type': 'application/json',
               'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
               'X-RapidAPI-Host': 'gpt-summarization.p.rapidapi.com'
-            }
+            },
+            timeout: 15000
           }
         );
-
-        res.json({
-          success: true,
-          summary: response.data.summary,
-          provider: 'rapidapi'
-        });
-        return;
+        return res.json({ success: true, summary: response.data.summary, provider: 'rapidapi' });
       } catch (rapidError) {
         console.log('RapidAPI summarization failed:', rapidError.message);
       }
     }
 
-    // Fallback using OpenAI
-    if (process.env.OPENAI_API_KEY) {
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'Summarize the following text in 2-3 sentences:' },
-            { role: 'user', content: text }
-          ],
-          max_tokens: 200
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      res.json({
-        success: true,
-        summary: response.data.choices[0].message.content,
-        provider: 'openai'
-      });
-      return;
-    }
-
-    res.status(503).json({
-      success: false,
-      error: 'Summarization service unavailable'
-    });
+    // 2. Fallback: chatWithFallback (7 providers: OpenRouter, OpenAI, Groq, Together, DeepInfra, HF, Pollinations)
+    const messages = [
+      { role: 'system', content: 'Summarize the following text in 2-3 concise sentences. Return ONLY the summary, nothing else.' },
+      { role: 'user', content: text }
+    ];
+    const result = await chatWithFallback(messages);
+    return res.json({ success: true, summary: result.response, provider: `ai-${result.provider}` });
   } catch (error) {
     console.error('Summarization error:', error.message);
-    res.status(500).json({
-      error: 'Failed to summarize text',
-      message: error.message
-    });
+    res.status(500).json({ error: 'Failed to summarize text', message: error.message });
   }
 });
 
-// RapidAPI - Background Removal
+// Background Removal — 4 providers: Fal.ai, Replicate, RapidAPI, HuggingFace
 app.post('/api/image/remove-background', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Image file is required' });
     }
 
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+    const imageDataUrl = `data:image/png;base64,${base64Image}`;
+
+    // Clean up file after reading
+    const cleanUp = () => {
+      try { if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); } catch (e) { }
+    };
+
+    // 1. Fal.ai Background Removal (fast)
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://queue.fal.run/fal-ai/birefnet',
+          { image_url: imageDataUrl },
+          {
+            headers: { 'Authorization': `Key ${process.env.FAL_KEY || process.env.FAL_API_KEY}`, 'Content-Type': 'application/json' },
+            timeout: 30000
+          }
+        );
+        const imgUrl = response.data?.image?.url;
+        if (imgUrl) {
+          const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 15000 });
+          cleanUp();
+          return res.json({
+            success: true,
+            imageUrl: `data:image/png;base64,${Buffer.from(imgRes.data).toString('base64')}`,
+            provider: 'fal-birefnet'
+          });
+        }
+      } catch (e) { console.log('Fal.ai bg removal failed:', e.message); }
+    }
+
+    // 2. Replicate remove-bg
+    if (process.env.REPLICATE_API_TOKEN) {
+      try {
+        const createRes = await axios.post('https://api.replicate.com/v1/predictions', {
+          version: 'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003',
+          input: { image: imageDataUrl }
+        }, {
+          headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`, 'Content-Type': 'application/json' },
+          timeout: 15000
+        });
+        const predictionId = createRes.data.id;
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const check = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+            headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}` }
+          });
+          if (check.data.status === 'succeeded' && check.data.output) {
+            const imgRes = await axios.get(check.data.output, { responseType: 'arraybuffer' });
+            cleanUp();
+            return res.json({
+              success: true,
+              imageUrl: `data:image/png;base64,${Buffer.from(imgRes.data).toString('base64')}`,
+              provider: 'replicate-rembg'
+            });
+          }
+          if (check.data.status === 'failed') break;
+        }
+      } catch (e) { console.log('Replicate bg removal failed:', e.message); }
+    }
+
+    // 3. RapidAPI Background Removal
     if (process.env.RAPIDAPI_KEY) {
       try {
-        // Read image file as base64
-        const imageBuffer = fs.readFileSync(req.file.path);
-        const base64Image = imageBuffer.toString('base64');
-
         const response = await axios.post(
           'https://background-removal.p.rapidapi.com/remove',
-          {
-            image: `data:image/jpeg;base64,${base64Image}`
-          },
+          { image: `data:image/jpeg;base64,${base64Image}` },
           {
             headers: {
               'content-type': 'application/json',
               'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
               'X-RapidAPI-Host': 'background-removal.p.rapidapi.com'
             },
-            responseType: 'arraybuffer'
+            responseType: 'arraybuffer',
+            timeout: 30000
           }
         );
-
-        // Convert response to base64
         const base64Result = Buffer.from(response.data, 'binary').toString('base64');
-        const dataUrl = `data:image/png;base64,${base64Result}`;
-
-        // Clean up uploaded file
-        fs.unlinkSync(req.file.path);
-
-        res.json({
-          success: true,
-          imageUrl: dataUrl,
-          provider: 'rapidapi'
-        });
-        return;
-      } catch (rapidError) {
-        console.log('RapidAPI background removal failed:', rapidError.message);
-      }
+        cleanUp();
+        return res.json({ success: true, imageUrl: `data:image/png;base64,${base64Result}`, provider: 'rapidapi' });
+      } catch (e) { console.log('RapidAPI bg removal failed:', e.message); }
     }
 
-    // Clean up file even if failed
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    // 4. HuggingFace BRIA RMBG
+    if (process.env.HUGGING_FACE_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api-inference.huggingface.co/models/briaai/RMBG-1.4',
+          imageBuffer,
+          {
+            headers: { 'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`, 'Content-Type': 'application/octet-stream' },
+            responseType: 'arraybuffer',
+            timeout: 60000
+          }
+        );
+        if (response.data && response.data.byteLength > 100) {
+          cleanUp();
+          return res.json({
+            success: true,
+            imageUrl: `data:image/png;base64,${Buffer.from(response.data).toString('base64')}`,
+            provider: 'huggingface-rmbg'
+          });
+        }
+      } catch (e) { console.log('HuggingFace bg removal failed:', e.message); }
     }
 
+    cleanUp();
     res.status(503).json({
       success: false,
-      error: 'Background removal service unavailable',
-      message: 'RAPIDAPI_KEY not configured or service failed'
+      error: 'Background removal failed across all providers',
+      message: 'Add FAL_KEY, REPLICATE_API_TOKEN, or HUGGING_FACE_API_KEY'
     });
   } catch (error) {
-    // Clean up file on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     console.error('Background removal error:', error.message);
-    res.status(500).json({
-      error: 'Failed to remove background',
-      message: error.message
-    });
+    res.status(500).json({ error: 'Failed to remove background', message: error.message });
   }
 });
 

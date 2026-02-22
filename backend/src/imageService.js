@@ -439,30 +439,103 @@ const generateImage = async (prompt, opts = {}) => {
 };
 
 // =============================================
-// IMG2IMG (Replicate-based)
+// IMG2IMG — Multi-provider with cascading fallback
+// Supports: Fal.ai, HuggingFace, Replicate, DeepInfra
 // =============================================
-const generateImageToImageReplicate = async (imageDataUrl, prompt, opts = {}) => {
+
+// --- Fal.ai img2img (FLUX fill — fast) ---
+const img2imgWithFal = async (imageDataUrl, prompt, opts = {}) => {
+  const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
+  if (!key) throw new Error('FAL_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://queue.fal.run/fal-ai/flux/dev/image-to-image',
+    {
+      image_url: imageDataUrl,
+      prompt,
+      strength: opts.strength ?? 0.75,
+      num_inference_steps: 28,
+      output_format: 'png',
+    },
+    {
+      headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
+      timeout: 45000,
+    }
+  );
+
+  const imgUrl = response.data?.images?.[0]?.url;
+  if (!imgUrl) throw new Error('Fal.ai img2img: no image in response');
+
+  const imgRes = await axiosClient.get(imgUrl, { responseType: 'arraybuffer', timeout: 15000 });
+  return {
+    imageUrl: `data:image/png;base64,${Buffer.from(imgRes.data).toString('base64')}`,
+    source: 'fal-img2img',
+  };
+};
+
+// --- HuggingFace img2img (SDXL refiner) ---
+const img2imgWithHuggingFace = async (imageBuffer, prompt, opts = {}) => {
+  const key = process.env.HUGGING_FACE_API_KEY;
+  if (!key) throw new Error('HUGGING_FACE_API_KEY not configured');
+
+  // HF img2img uses multi-part: send image as bytes + prompt as parameters
+  const models = [
+    'stabilityai/stable-diffusion-xl-refiner-1.0',
+    'runwayml/stable-diffusion-v1-5',
+  ];
+
+  for (const model of models) {
+    try {
+      const response = await axiosClient.post(
+        `https://api-inference.huggingface.co/models/${model}`,
+        imageBuffer,
+        {
+          headers: {
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/octet-stream',
+          },
+          params: {
+            prompt,
+            strength: opts.strength ?? 0.75,
+          },
+          responseType: 'arraybuffer',
+          timeout: 60000,
+        }
+      );
+      if (response.data && response.data.byteLength > 100) {
+        return {
+          imageUrl: `data:image/png;base64,${Buffer.from(response.data).toString('base64')}`,
+          source: `huggingface-img2img:${model.split('/')[1]}`,
+        };
+      }
+    } catch (e) {
+      console.warn(`HF img2img ${model} failed:`, e.message);
+    }
+  }
+  throw new Error('HuggingFace img2img: all models failed');
+};
+
+// --- Replicate img2img (SD) ---
+const img2imgWithReplicate = async (imageDataUrl, prompt, opts = {}) => {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN not configured');
 
   const strength = opts.strength ?? 0.75;
+  const headers = { Authorization: `Token ${token}`, 'Content-Type': 'application/json' };
+
   const createRes = await axiosClient.post(
     'https://api.replicate.com/v1/predictions',
     {
       version: 'stability-ai/stable-diffusion-img2img:15a3689ee13b0d2616e98820eca31d4c3abcd36672df6afce5cb6feb1d66087d',
       input: { image: imageDataUrl, prompt, prompt_strength: strength, num_inference_steps: 25 },
     },
-    {
-      headers: { Authorization: `Token ${token}`, 'Content-Type': 'application/json' },
-    }
+    { headers }
   );
 
   const predictionId = createRes.data.id;
   for (let i = 0; i < 40; i++) {
     await wait(2000);
-    const check = await axiosClient.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-      headers: { Authorization: `Token ${token}` },
-    });
+    const check = await axiosClient.get(`https://api.replicate.com/v1/predictions/${predictionId}`, { headers });
     if (check.data.status === 'succeeded') {
       const url = check.data.output?.[0];
       if (url) {
@@ -480,19 +553,83 @@ const generateImageToImageReplicate = async (imageDataUrl, prompt, opts = {}) =>
   throw new Error('Replicate img2img timeout');
 };
 
+// --- DeepInfra img2img (SDXL) ---
+const img2imgWithDeepInfra = async (imageDataUrl, prompt, opts = {}) => {
+  const key = process.env.DEEPINFRA_API_KEY;
+  if (!key) throw new Error('DEEPINFRA_API_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://api.deepinfra.com/v1/openai/images/edits',
+    {
+      image: imageDataUrl,
+      prompt,
+      model: 'stability-ai/sdxl',
+      n: 1,
+      size: '1024x1024',
+      response_format: 'b64_json',
+    },
+    {
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      timeout: 60000,
+    }
+  );
+
+  if (response.status === 200 && response.data?.data?.[0]?.b64_json) {
+    return {
+      imageUrl: `data:image/png;base64,${response.data.data[0].b64_json}`,
+      source: 'deepinfra-img2img',
+    };
+  }
+  throw new Error(`DeepInfra img2img ${response.status}`);
+};
+
+// --- MAIN: img2img with cascading fallback ---
 const generateImageToImage = async (imageBuffer, prompt, opts = {}) => {
   const base64 = imageBuffer.toString('base64');
   const imageDataUrl = `data:image/png;base64,${base64}`;
+  const start = Date.now();
 
-  if (process.env.REPLICATE_API_TOKEN) {
+  const providers = [
+    (process.env.FAL_KEY || process.env.FAL_API_KEY)
+      ? { name: 'fal', run: () => img2imgWithFal(imageDataUrl, prompt, opts) }
+      : null,
+    process.env.HUGGING_FACE_API_KEY
+      ? { name: 'huggingface', run: () => img2imgWithHuggingFace(imageBuffer, prompt, opts) }
+      : null,
+    process.env.REPLICATE_API_TOKEN
+      ? { name: 'replicate', run: () => img2imgWithReplicate(imageDataUrl, prompt, opts) }
+      : null,
+    process.env.DEEPINFRA_API_KEY
+      ? { name: 'deepinfra', run: () => img2imgWithDeepInfra(imageDataUrl, prompt, opts) }
+      : null,
+  ].filter(Boolean);
+
+  if (providers.length === 0) {
+    throw new Error(
+      'Img2img requires at least one API key: FAL_KEY, HUGGING_FACE_API_KEY, REPLICATE_API_TOKEN, or DEEPINFRA_API_KEY'
+    );
+  }
+
+  const errors = [];
+  for (const p of providers) {
     try {
-      return await generateImageToImageReplicate(imageDataUrl, prompt, opts);
+      const result = await p.run();
+      const latency = Date.now() - start;
+      console.log(`[img2img] succeeded via ${result.source} (${latency}ms)`);
+      result.provider = result.source;
+      result.latency = latency;
+      result.success = true;
+      return result;
     } catch (e) {
-      console.warn('Replicate img2img failed:', e.message);
+      console.warn(`[img2img] ${p.name} failed:`, e.message);
+      errors.push(`${p.name}: ${e.message}`);
     }
   }
 
-  throw new Error('Img2img requires REPLICATE_API_TOKEN. Add it in Render environment variables.');
+  throw new Error(
+    `Image transformation failed (tried ${errors.length} providers). Details: ${errors.join('; ')}`
+  );
 };
 
 module.exports = { generateImage, generateImageToImage };
+

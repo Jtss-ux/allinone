@@ -36,7 +36,7 @@ export default function VideoGenerator() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 rounded-lg p-8">
         <h3 className="text-xl font-semibold mb-4">Generate a Video</h3>
-        
+
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Describe your video</label>
           <textarea
@@ -63,7 +63,7 @@ export default function VideoGenerator() {
           disabled={loading}
           className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Processing...' : 'Generate Video'}
+          {loading ? '🎬 Racing AI providers...' : 'Generate Video'}
         </button>
 
         {result && (
@@ -75,8 +75,16 @@ export default function VideoGenerator() {
             <p className="text-sm text-gray-300">
               <strong>Status:</strong> {result.message}
             </p>
+            {result.provider && (
+              <p className="text-sm text-gray-300 mt-1">
+                <strong>Model:</strong>{' '}
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                  🤖 {result.provider}
+                </span>
+              </p>
+            )}
             <p className="text-sm text-gray-300">
-              <strong>Estimated Time:</strong> {result.estimatedTime}
+              <strong>Estimated Time:</strong> {result.estimatedTime || 'Depends on provider'}
             </p>
           </div>
         )}

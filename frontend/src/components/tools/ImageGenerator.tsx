@@ -105,8 +105,8 @@ export default function ImageGenerator() {
 
         {loading && (
           <div className="mt-4 text-center text-gray-400">
-            <div className="animate-pulse">Loading AI model and generating...</div>
-            <p className="text-sm mt-2">First time may take 1-2 minutes to download the model</p>
+            <div className="animate-pulse">⚡ Racing AI providers for the fastest result...</div>
+            <p className="text-sm mt-2">Trying multiple models simultaneously</p>
           </div>
         )}
 
@@ -134,10 +134,29 @@ export default function ImageGenerator() {
             )}
 
             {result.prompt && (
-              <div className="p-3 bg-gray-700 rounded-lg">
+              <div className="p-3 bg-gray-700 rounded-lg space-y-1">
                 <p className="text-sm text-gray-300">
                   <strong>Prompt:</strong> {result.prompt}
                 </p>
+                {result.provider && (
+                  <p className="text-sm text-gray-300">
+                    <strong>Model:</strong>{' '}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                      🤖 {result.provider}
+                    </span>
+                    {result.tier && (
+                      <span className={`ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${result.tier === 'fast' ? 'bg-green-900/50 text-green-300 border-green-700/50' :
+                          result.tier === 'slow' ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50' :
+                            'bg-blue-900/50 text-blue-300 border-blue-700/50'
+                        }`}>
+                        {result.tier === 'fast' ? '⚡' : result.tier === 'slow' ? '🐢' : '🆓'} {result.tier}
+                      </span>
+                    )}
+                    {result.latency && (
+                      <span className="ml-1.5 text-xs text-gray-500">{(result.latency / 1000).toFixed(1)}s</span>
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </div>

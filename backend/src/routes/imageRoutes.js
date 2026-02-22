@@ -76,6 +76,8 @@ router.post('/img2img', upload.single('image'), async (req, res) => {
       success: true,
       imageUrl: result.imageUrl,
       imageBase64: result.imageUrl,
+      provider: result.provider || 'unknown',
+      latency: result.latency,
       jobId: `img2img-${Date.now()}`,
     });
   } catch (error) {
