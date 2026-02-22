@@ -126,7 +126,7 @@ export default function PhotoEffects() {
         {/* Upload Area */}
         <div className="mb-6">
           <label className="block w-full p-8 border-2 border-dashed border-gray-600 rounded-lg text-center cursor-pointer hover:border-green-500 transition">
-            <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+            <input type="file" accept="image/png,image/jpeg" onChange={handleImageChange} className="hidden" />
             {preview ? (
               <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
             ) : (

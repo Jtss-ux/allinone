@@ -61,6 +61,19 @@ router.post('/img2img', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'Image file is required' });
     }
 
+    // Validate file type — only PNG and JPEG supported by AI models
+    if (req.file) {
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      if (!allowedTypes.includes(req.file.mimetype)) {
+        return res.status(400).json({
+          error: `Unsupported file type: ${req.file.mimetype}. Only PNG and JPEG files are supported.`
+        });
+      }
+      if (req.file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+      }
+    }
+
     let imageBuffer = req.file?.buffer;
     if (!imageBuffer && req.body.image) {
       const base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, '');

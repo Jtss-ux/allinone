@@ -64,7 +64,7 @@ export default function ChangeCamera() {
           <label className="block text-sm font-medium mb-2">Upload Photo</label>
           <input
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg"
             onChange={handleImageChange}
             className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600"
           />
