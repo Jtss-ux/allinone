@@ -5,14 +5,16 @@ import React, { useState, useEffect, useRef } from 'react';
 export default function PomodoroTimer() {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
-  const [mode, setMode] = useState<'work' | 'short' | 'long'>('work');
+  const [mode, setMode] = useState<'work' | 'short' | 'long' | 'custom'>('work');
   const [cycles, setCycles] = useState(0);
+  const [customMinutes, setCustomMinutes] = useState(45);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const modes = {
+  const modes: Record<string, { time: number; label: string; color: string }> = {
     work: { time: 25 * 60, label: 'Work', color: 'from-red-600 to-orange-600' },
     short: { time: 5 * 60, label: 'Short Break', color: 'from-green-600 to-teal-600' },
     long: { time: 15 * 60, label: 'Long Break', color: 'from-blue-600 to-purple-600' },
+    custom: { time: customMinutes * 60, label: 'Custom', color: 'from-yellow-600 to-pink-600' },
   };
 
   useEffect(() => {
@@ -40,10 +42,10 @@ export default function PomodoroTimer() {
     setTimeLeft(modes[mode].time);
   };
 
-  const switchMode = (newMode: 'work' | 'short' | 'long') => {
+  const switchMode = (newMode: 'work' | 'short' | 'long' | 'custom') => {
     setMode(newMode);
     setIsActive(false);
-    setTimeLeft(modes[newMode].time);
+    setTimeLeft(newMode === 'custom' ? customMinutes * 60 : modes[newMode].time);
   };
 
   const formatTime = (seconds: number) => {
@@ -68,17 +70,38 @@ export default function PomodoroTimer() {
             {Object.entries(modes).map(([key, config]) => (
               <button
                 key={key}
-                onClick={() => switchMode(key as 'work' | 'short' | 'long')}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                  mode === key
+                onClick={() => switchMode(key as 'work' | 'short' | 'long' | 'custom')}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === key
                     ? 'bg-white text-gray-900'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                  }`}
               >
                 {config.label}
               </button>
             ))}
           </div>
+
+          {/* Custom Time Input */}
+          {mode === 'custom' && (
+            <div className="flex items-center gap-3 mt-2">
+              <label className="text-sm font-medium">Minutes:</label>
+              <input
+                type="number" min="1" max="240" value={customMinutes}
+                onChange={(e) => {
+                  const val = Math.max(1, Math.min(240, Number(e.target.value)));
+                  setCustomMinutes(val);
+                  if (!isActive) setTimeLeft(val * 60);
+                }}
+                className="w-24 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 text-center focus:border-yellow-500 focus:outline-none"
+              />
+              <button
+                onClick={() => { setIsActive(false); setTimeLeft(customMinutes * 60); }}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm font-semibold transition"
+              >
+                Set
+              </button>
+            </div>
+          )}
 
           {/* Timer Display */}
           <div className="relative">
@@ -97,11 +120,10 @@ export default function PomodoroTimer() {
           <div className="flex gap-3">
             <button
               onClick={toggleTimer}
-              className={`flex-1 py-4 rounded-lg font-bold text-xl transition ${
-                isActive
+              className={`flex-1 py-4 rounded-lg font-bold text-xl transition ${isActive
                   ? 'bg-yellow-600 hover:bg-yellow-700'
                   : 'bg-green-600 hover:bg-green-700'
-              }`}
+                }`}
             >
               {isActive ? '⏸️ Pause' : '▶️ Start'}
             </button>

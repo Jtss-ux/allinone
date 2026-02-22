@@ -50,6 +50,7 @@ export default function FileConverter() {
   const [convertedUrl, setConvertedUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ffmpegRef = useRef<any>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -57,7 +58,7 @@ export default function FileConverter() {
       setFile(selectedFile);
       setConvertedUrl(null);
       setError('');
-      
+
       // Auto-detect format
       const ext = selectedFile.name.split('.').pop()?.toLowerCase() || '';
       if (['mp4', 'webm', 'mkv', 'avi', 'mov', 'gif'].includes(ext)) {
@@ -72,6 +73,34 @@ export default function FileConverter() {
     }
   };
 
+  const convertImage = () => {
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+
+      let mimeType = 'image/png';
+      if (selectedFormat === 'jpg' || selectedFormat === 'jpeg') mimeType = 'image/jpeg';
+      else if (selectedFormat === 'webp') mimeType = 'image/webp';
+      else if (selectedFormat === 'gif') mimeType = 'image/gif';
+      else if (selectedFormat === 'bmp') mimeType = 'image/bmp';
+      else if (selectedFormat === 'ico') mimeType = 'image/x-icon';
+
+      const dataUrl = canvas.toDataURL(mimeType, 0.92);
+      setConvertedUrl(dataUrl);
+      setConverting(false);
+    };
+    img.onerror = () => {
+      setError('Failed to load image');
+      setConverting(false);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+
   const convertFile = async () => {
     if (!file) {
       setError('Please select a file');
@@ -82,49 +111,83 @@ export default function FileConverter() {
     setError('');
 
     try {
-      // For images - use canvas conversion
       if (mode === 'image') {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0);
-          
-          let mimeType = 'image/png';
-          if (selectedFormat === 'jpg' || selectedFormat === 'jpeg') mimeType = 'image/jpeg';
-          else if (selectedFormat === 'webp') mimeType = 'image/webp';
-          else if (selectedFormat === 'gif') mimeType = 'image/gif';
-          else if (selectedFormat === 'bmp') mimeType = 'image/bmp';
-          else if (selectedFormat === 'ico') mimeType = 'image/x-icon';
-          
-          const dataUrl = canvas.toDataURL(mimeType, 0.92);
-          setConvertedUrl(dataUrl);
-          setConverting(false);
-        };
-        img.onerror = () => {
-          setError('Failed to load image');
-          setConverting(false);
-        };
-        img.src = URL.createObjectURL(file);
+        convertImage();
         return;
       }
 
-      // For other files - show info that WebAssembly conversion would happen
-      // In a real implementation, you'd use ffmpeg.wasm or similar
-      setError('Video/Audio/Document conversion requires ffmpeg.wasm. Try converting images for now!');
+      if (mode === 'document') {
+        setError('Document conversion requires a backend service. Images/Audio/Video are processed locally.');
+        setConverting(false);
+        return;
+      }
+
+      // Initialize FFmpeg
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { fetchFile, toBlobURL } = await import('@ffmpeg/util');
+
+      if (!ffmpegRef.current) {
+        ffmpegRef.current = new FFmpeg();
+        ffmpegRef.current.on('log', ({ message }: any) => console.log(message));
+      }
+
+      const ffmpeg = ffmpegRef.current;
+
+      if (!ffmpeg.loaded) {
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+      }
+
+      // Write input file to FFmpeg WASM FS
+      const inputName = `input.${file.name.split('.').pop()}`;
+      const outputName = `output.${selectedFormat}`;
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+      // Execute conversion command
+      let args = ['-i', inputName];
+      if (mode === 'video' && selectedFormat === 'gif') {
+        args.push('-vf', 'fps=10,scale=320:-1:flags=lanczos', '-c:v', 'gif');
+      } else if (mode === 'audio' && selectedFormat === 'mp3') {
+        args.push('-c:a', 'libmp3lame', '-q:a', '2');
+      }
+      args.push(outputName);
+
+      await ffmpeg.exec(args);
+
+      // Read result and format download URL
+      const data = await ffmpeg.readFile(outputName);
+
+      let mimeType = 'application/octet-stream';
+      if (mode === 'video') mimeType = `video/${selectedFormat}`;
+      else if (mode === 'audio') mimeType = `audio/${selectedFormat}`;
+
+      const blob = new Blob([new Uint8Array(data as any)], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+
+      setConvertedUrl(url);
       setConverting(false);
-      
-    } catch (err) {
-      setError('Conversion failed. Try a different file.');
+
+      // Cleanup WASM memory
+      try {
+        await ffmpeg.deleteFile(inputName);
+        await ffmpeg.deleteFile(outputName);
+      } catch (e) {
+        // ignore
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setError(`Conversion failed: ${err.message || 'Unknown error'}. Try a smaller file.`);
       setConverting(false);
     }
   };
 
   const downloadConverted = () => {
     if (!convertedUrl) return;
-    
+
     const link = document.createElement('a');
     link.href = convertedUrl;
     link.download = `converted.${selectedFormat}`;
@@ -151,11 +214,10 @@ export default function FileConverter() {
             <button
               key={tab.id}
               onClick={() => { setMode(tab.id as ConvertMode); setSelectedFormat(formatOptions[tab.id as ConvertMode][0].ext); }}
-              className={`flex-1 p-4 text-center font-semibold transition ${
-                mode === tab.id
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+              className={`flex-1 p-4 text-center font-semibold transition ${mode === tab.id
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
             >
               <span className="block text-2xl mb-1">{tab.icon}</span>
               {tab.label}
@@ -167,16 +229,16 @@ export default function FileConverter() {
           {/* File Upload */}
           <div className="mb-6">
             <label className="block w-full p-8 border-2 border-dashed border-gray-600 rounded-lg text-center cursor-pointer hover:border-green-500 transition">
-              <input 
+              <input
                 ref={fileInputRef}
-                type="file" 
+                type="file"
                 accept={
-                  mode === 'video' ? 'video/*' : 
-                  mode === 'audio' ? 'audio/*' : 
-                  mode === 'image' ? 'image/*' : '.pdf,.docx,.txt,.md'
+                  mode === 'video' ? 'video/*' :
+                    mode === 'audio' ? 'audio/*' :
+                      mode === 'image' ? 'image/*' : '.pdf,.docx,.txt,.md'
                 }
-                onChange={handleFileChange} 
-                className="hidden" 
+                onChange={handleFileChange}
+                className="hidden"
               />
               {file ? (
                 <div>
@@ -209,11 +271,10 @@ export default function FileConverter() {
                 <button
                   key={format.ext}
                   onClick={() => setSelectedFormat(format.ext)}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
-                    selectedFormat === format.ext
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${selectedFormat === format.ext
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
                 >
                   {format.label} (.{format.ext})
                 </button>
@@ -230,7 +291,7 @@ export default function FileConverter() {
             >
               {converting ? '⏳ Converting...' : '🔄 Convert File'}
             </button>
-            
+
             {convertedUrl && (
               <button
                 onClick={downloadConverted}
@@ -263,7 +324,7 @@ export default function FileConverter() {
               <li>• Choose output format</li>
               <li>• Click convert - processing happens locally!</li>
               <li>• Download the converted file</li>
-              <li>• For video/audio conversion, use ffmpeg.wasm (requires server setup)</li>
+              <li>• Powered by FFmpeg WebAssembly (runs completely in your browser)</li>
             </ul>
           </div>
         </div>

@@ -1,0 +1,15 @@
+# .antigravity
+project:
+  name: "GHelper"
+  description: "Project using GSD methodology"
+  type: "web-application"
+
+# Add GSD rules as custom templates
+templates:
+  gsd-rules:
+    prompt: |
+      Follow these rules from PROJECT_RULES.md:
+      - Plan before building (SPEC.md must be FINALIZED)
+      - State is sacred (update STATE.md after each task)
+      - Verify empirically (screenshots, command outputs)
+      - Use wave-based execution with atomic commits

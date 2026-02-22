@@ -97,20 +97,20 @@ export default function TextToHandwriting() {
     lines.forEach(line => {
       // Add slight rotation for realism
       ctx.save();
-      
+
       // Add slight random offset for handwriting effect
       const offsetX = Math.random() * 2 - 1;
       const offsetY = Math.random() * 2 - 1;
-      
+
       // Draw with slight shadow for depth
       ctx.shadowColor = 'rgba(0,0,0,0.1)';
       ctx.shadowBlur = 1;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
-      
+
       ctx.fillText(line, 120 + offsetX, y + offsetY);
       ctx.restore();
-      
+
       y += fontSize * spacing;
     });
   };
@@ -118,7 +118,7 @@ export default function TextToHandwriting() {
   const downloadImage = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const link = document.createElement('a');
     link.download = `handwriting-${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -128,13 +128,13 @@ export default function TextToHandwriting() {
   const copyToClipboard = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     canvas.toBlob(blob => {
       if (blob) {
         navigator.clipboard.write([
           new ClipboardItem({ 'image/png': blob })
         ]);
-        alert('Copied to clipboard!');
+        import('react-hot-toast').then(({ toast }) => toast.success('Copied to clipboard!'));
       }
     });
   };
@@ -171,11 +171,10 @@ export default function TextToHandwriting() {
                   <button
                     key={s.id}
                     onClick={() => setStyle(s.id)}
-                    className={`p-3 rounded-lg text-center transition ${
-                      style === s.id
+                    className={`p-3 rounded-lg text-center transition ${style === s.id
                         ? 'bg-purple-600 ring-2 ring-purple-400'
                         : 'bg-gray-700 hover:bg-gray-600'
-                    }`}
+                      }`}
                     style={{ fontFamily: s.font }}
                   >
                     <span className="text-lg">Aa</span>
@@ -221,11 +220,10 @@ export default function TextToHandwriting() {
                   <button
                     key={p.id}
                     onClick={() => setPaper(p.id)}
-                    className={`p-3 rounded-lg text-center transition ${
-                      paper === p.id
+                    className={`p-3 rounded-lg text-center transition ${paper === p.id
                         ? 'bg-purple-600'
                         : 'bg-gray-700 hover:bg-gray-600'
-                    }`}
+                      }`}
                   >
                     <span className="text-sm">{p.name}</span>
                   </button>

@@ -210,7 +210,7 @@ export default function JarvisAI() {
 
       recognition.start();
     } else {
-      alert('Voice recognition is not supported in your browser.');
+      import('react-hot-toast').then(({ toast }) => toast.error('Voice recognition is not supported in your browser.'));
     }
   };
 

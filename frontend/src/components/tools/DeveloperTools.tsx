@@ -3,16 +3,19 @@
 import React, { useState } from 'react';
 
 export default function DeveloperTools() {
-  const [activeTool, setActiveTool] = useState<'base64' | 'json' | 'url' | 'password'>('base64');
+  const [activeTool, setActiveTool] = useState<'base64' | 'json' | 'url' | 'hex' | 'hash' | 'password'>('base64');
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [passwordLength, setPasswordLength] = useState(16);
   const [includeSymbols, setIncludeSymbols] = useState(true);
   const [includeNumbers, setIncludeNumbers] = useState(true);
 
+  // Unicode-safe Base64 encode/decode
   const encodeBase64 = () => {
     try {
-      setOutput(btoa(input));
+      const bytes = new TextEncoder().encode(input);
+      const binary = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+      setOutput(btoa(binary));
     } catch {
       setOutput('Error: Invalid input for Base64 encoding');
     }
@@ -20,7 +23,9 @@ export default function DeveloperTools() {
 
   const decodeBase64 = () => {
     try {
-      setOutput(atob(input));
+      const binary = atob(input.trim());
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      setOutput(new TextDecoder().decode(bytes));
     } catch {
       setOutput('Error: Invalid Base64 string');
     }
@@ -56,16 +61,45 @@ export default function DeveloperTools() {
     }
   };
 
+  const encodeHex = () => {
+    const hex = Array.from(new TextEncoder().encode(input)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    setOutput(hex);
+  };
+
+  const decodeHex = () => {
+    try {
+      const bytes = input.trim().split(/\s+/).map(h => parseInt(h, 16));
+      setOutput(new TextDecoder().decode(new Uint8Array(bytes)));
+    } catch {
+      setOutput('Error: Invalid hex string');
+    }
+  };
+
+  const generateHash = async () => {
+    try {
+      const data = new TextEncoder().encode(input);
+      const [md5Style, sha256, sha512] = await Promise.all([
+        crypto.subtle.digest('SHA-1', data),
+        crypto.subtle.digest('SHA-256', data),
+        crypto.subtle.digest('SHA-512', data),
+      ]);
+      const toHex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      setOutput(`SHA-1:   ${toHex(md5Style)}\nSHA-256: ${toHex(sha256)}\nSHA-512: ${toHex(sha512)}`);
+    } catch {
+      setOutput('Error: Could not generate hash');
+    }
+  };
+
   const generatePassword = () => {
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
     const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-    
+
     let chars = lowercase + uppercase;
     if (includeNumbers) chars += numbers;
     if (includeSymbols) chars += symbols;
-    
+
     let password = '';
     for (let i = 0; i < passwordLength; i++) {
       password += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -77,6 +111,8 @@ export default function DeveloperTools() {
     { id: 'base64', name: 'Base64', icon: '🔐' },
     { id: 'json', name: 'JSON', icon: '📋' },
     { id: 'url', name: 'URL', icon: '🔗' },
+    { id: 'hex', name: 'Hex', icon: '🔢' },
+    { id: 'hash', name: 'Hash', icon: '🔏' },
     { id: 'password', name: 'Password', icon: '🔑' },
   ];
 
@@ -94,11 +130,10 @@ export default function DeveloperTools() {
             <button
               key={tool.id}
               onClick={() => { setActiveTool(tool.id as any); setInput(''); setOutput(''); }}
-              className={`flex-1 p-4 text-center font-semibold transition ${
-                activeTool === tool.id
+              className={`flex-1 p-4 text-center font-semibold transition ${activeTool === tool.id
                   ? 'bg-green-600 text-white'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+                }`}
             >
               <span className="block text-2xl mb-1">{tool.icon}</span>
               {tool.name}
@@ -152,8 +187,8 @@ export default function DeveloperTools() {
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={`Enter ${activeTool === 'base64' ? 'text to encode' : activeTool === 'json' ? 'JSON to format' : 'URL to encode'}...`}
-                className="w-full p-4 bg-gray-700 text-white rounded-lg border border-gray-600 h-32"
+                placeholder={`Enter ${activeTool === 'base64' ? 'text to encode/decode' : activeTool === 'json' ? 'JSON to format' : activeTool === 'hex' ? 'text or hex to convert' : activeTool === 'hash' ? 'text to hash' : 'URL to encode'}...`}
+                className="w-full p-4 bg-gray-700 text-white rounded-lg border border-gray-600 h-32 focus:border-green-500 focus:outline-none"
               />
 
               <div className="flex gap-2">
@@ -186,6 +221,21 @@ export default function DeveloperTools() {
                       Decode
                     </button>
                   </>
+                )}
+                {activeTool === 'hex' && (
+                  <>
+                    <button onClick={encodeHex} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg">
+                      Text → Hex
+                    </button>
+                    <button onClick={decodeHex} className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg">
+                      Hex → Text
+                    </button>
+                  </>
+                )}
+                {activeTool === 'hash' && (
+                  <button onClick={generateHash} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg">
+                    🔏 Generate Hashes
+                  </button>
                 )}
               </div>
             </>

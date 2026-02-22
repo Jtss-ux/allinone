@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   description: 'Generate images, videos, and audio with AI',
 }
 
+import { Toaster } from 'react-hot-toast'
+import Providers from '@/components/Providers'
+import { CSPostHogProvider } from '@/components/PostHogProvider'
+
 export default function RootLayout({
   children,
 }: {
@@ -13,7 +17,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-900 text-white">{children}</body>
+      <body className="bg-gray-900 text-white">
+        <CSPostHogProvider>
+          <Providers>
+            {children}
+            <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+          </Providers>
+        </CSPostHogProvider>
+      </body>
     </html>
   )
 }

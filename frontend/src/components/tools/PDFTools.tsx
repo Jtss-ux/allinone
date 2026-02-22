@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { PDFDocument } from 'pdf-lib';
+import { toast } from 'react-hot-toast';
 
 export default function PDFTools() {
   const [mode, setMode] = useState<'merge' | 'split' | 'compress'>('merge');
@@ -20,14 +21,14 @@ export default function PDFTools() {
 
   const mergePDFs = async () => {
     if (files.length < 2) {
-      alert('Please select at least 2 PDF files');
+      toast.error('Please select at least 2 PDF files');
       return;
     }
 
     setLoading(true);
     try {
       const mergedPdf = await PDFDocument.create();
-      
+
       for (const file of files) {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await PDFDocument.load(arrayBuffer);
@@ -42,14 +43,14 @@ export default function PDFTools() {
       setResult(url);
     } catch (error) {
       console.error('Error merging PDFs:', error);
-      alert('Error merging PDFs');
+      toast.error('Error merging PDFs');
     }
     setLoading(false);
   };
 
   const splitPDF = async () => {
     if (files.length === 0) {
-      alert('Please select a PDF file');
+      toast.error('Please select a PDF file');
       return;
     }
 
@@ -59,10 +60,10 @@ export default function PDFTools() {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await PDFDocument.load(arrayBuffer);
       const pages = pdf.getPages();
-      
+
       // For demo, split into individual pages
       const splitPdfs: string[] = [];
-      
+
       for (let i = 0; i < pages.length; i++) {
         const newPdf = await PDFDocument.create();
         const [copiedPage] = await newPdf.copyPages(pdf, [i]);
@@ -72,7 +73,7 @@ export default function PDFTools() {
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         splitPdfs.push(URL.createObjectURL(blob));
       }
-      
+
       setResult(splitPdfs[0]); // Show first page for demo
     } catch (error) {
       console.error('Error splitting PDF:', error);
@@ -82,7 +83,7 @@ export default function PDFTools() {
 
   const compressPDF = async () => {
     if (files.length === 0) {
-      alert('Please select a PDF file');
+      toast.error('Please select a PDF file');
       return;
     }
 
@@ -91,7 +92,7 @@ export default function PDFTools() {
       const file = files[0];
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await PDFDocument.load(arrayBuffer);
-      
+
       // Compress by saving with optimization
       const compressedBytes = await pdf.save({
         useObjectStreams: true,
@@ -139,9 +140,8 @@ export default function PDFTools() {
             <button
               key={tab.id}
               onClick={() => { setMode(tab.id as any); setFiles([]); setResult(null); }}
-              className={`flex-1 p-4 text-center font-semibold transition ${
-                mode === tab.id ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+              className={`flex-1 p-4 text-center font-semibold transition ${mode === tab.id ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
             >
               <span className="block text-2xl mb-1">{tab.icon}</span>
               {tab.label}

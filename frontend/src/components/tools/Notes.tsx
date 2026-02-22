@@ -85,7 +85,7 @@ export default function Notes() {
     e.stopPropagation();
     const updatedNotes = notes.filter(note => note.id !== id);
     setNotes(updatedNotes);
-    
+
     if (currentNote?.id === id) {
       setCurrentNote(updatedNotes.length > 0 ? updatedNotes[0] : null);
     }
@@ -116,10 +116,10 @@ export default function Notes() {
         const importedNotes = JSON.parse(event.target?.result as string);
         if (Array.isArray(importedNotes)) {
           setNotes([...importedNotes, ...notes]);
-          alert(`Imported ${importedNotes.length} notes successfully!`);
+          import('react-hot-toast').then(({ toast }) => toast.success(`Imported ${importedNotes.length} notes successfully!`));
         }
       } catch (error) {
-        alert('Error importing notes. Please check the file format.');
+        import('react-hot-toast').then(({ toast }) => toast.error('Error importing notes. Please check the file format.'));
       }
     };
     reader.readAsText(file);
@@ -193,9 +193,8 @@ export default function Notes() {
                   setCurrentNote(note);
                   setIsDirty(false);
                 }}
-                className={`p-4 border-b border-gray-800 cursor-pointer hover:bg-gray-800 transition ${
-                  currentNote?.id === note.id ? 'bg-gray-800 border-l-4 border-l-green-500' : ''
-                }`}
+                className={`p-4 border-b border-gray-800 cursor-pointer hover:bg-gray-800 transition ${currentNote?.id === note.id ? 'bg-gray-800 border-l-4 border-l-green-500' : ''
+                  }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">

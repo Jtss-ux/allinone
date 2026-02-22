@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ImageGenerator from './tools/ImageGenerator';
 import VideoGenerator from './tools/VideoGenerator';
 import AudioGenerator from './tools/AudioGenerator';
@@ -276,8 +277,19 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
-        {renderTool()}
+      <div className="flex-1 overflow-auto p-8 bg-gray-900">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={section}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="h-full"
+          >
+            {renderTool()}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

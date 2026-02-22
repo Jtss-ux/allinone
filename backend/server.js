@@ -801,6 +801,76 @@ app.post('/api/seo/generate', upload.none(), async (req, res) => {
   }
 });
 
+// =============================================
+// LANGCHAIN AGENT (Phase 7)
+// =============================================
+let ChatGroq, AgentExecutor, createReactAgent, DynamicTool, pull, search;
+try {
+  ChatGroq = require('@langchain/groq').ChatGroq;
+  AgentExecutor = require('langchain/agents').AgentExecutor;
+  createReactAgent = require('langchain/agents').createReactAgent;
+  DynamicTool = require('@langchain/core/tools').DynamicTool;
+  pull = require('langchain/hub').pull;
+  search = require('duck-duck-scrape').search;
+} catch (e) {
+  console.log('Langchain optional packages not fully installed yet.');
+}
+
+app.post('/api/agent', upload.none(), async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    if (!ChatGroq || !process.env.GROQ_API_KEY) {
+      return res.status(503).json({
+        success: false,
+        error: 'Agent features require the GROQ_API_KEY and LangChain backend packages.'
+      });
+    }
+
+    // Tools setup
+    const webSearchTool = new DynamicTool({
+      name: "web_search",
+      description: "Search the internet for current events, facts, or information. Input should be a specific search query.",
+      func: async (query) => {
+        try {
+          const results = await search(query, { safeSearch: 1 });
+          return JSON.stringify(results.results.slice(0, 3).map(r => ({
+            title: r.title,
+            snippet: r.description,
+            url: r.url
+          })));
+        } catch (e) {
+          return "Web search is currently unavailable.";
+        }
+      }
+    });
+
+    const llm = new ChatGroq({
+      apiKey: process.env.GROQ_API_KEY,
+      modelName: "llama-3.3-70b-versatile",
+      temperature: 0
+    });
+
+    const tools = [webSearchTool];
+    const promptTemplate = await pull("hwchase17/react");
+
+    const agent = await createReactAgent({ llm, tools, prompt: promptTemplate });
+    const agentExecutor = new AgentExecutor({ agent, tools, maxIterations: 5 });
+
+    const result = await agentExecutor.invoke({ input: prompt });
+
+    res.json({
+      success: true,
+      response: result.output,
+      provider: 'langchain-groq'
+    });
+  } catch (error) {
+    console.error('Agent error:', error.message);
+    res.status(500).json({ error: 'Agent failed to process request', message: error.message });
+  }
+});
+
 // Social Media Post Generator — creates platform-specific posts
 app.post('/api/social/generate', upload.none(), async (req, res) => {
   try {
