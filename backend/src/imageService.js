@@ -1,5 +1,12 @@
 const axios = require('axios');
 
+// =============================================
+// IMAGE SERVICE — 2-Tier Parallel Racing Architecture
+// Tier 1 (Fast): Promise.any races Prodia, Fal, DeepInfra, Together
+// Tier 2 (Slow): Sequential fallback through HuggingFace, Replicate, Segmind, Clipdrop
+// Tier 3 (Free): Pollinations — always available, no key required
+// =============================================
+
 const axiosClient = axios.create({
   timeout: 45000,
   validateStatus: () => true,
@@ -29,6 +36,10 @@ const requestWithRetry = async (url, options = {}, maxRetries = 2) => {
   throw lastError || new Error('Request failed after retries');
 };
 
+// =============================================
+// PROVIDER IMPLEMENTATIONS
+// =============================================
+
 // --- Prodia (flux-fast + flux-2.klein fallback) ---
 const generateWithProdia = async (prompt) => {
   const key = process.env.PRODIA_API_KEY || process.env.PRODIA_LEGACY_API_KEY;
@@ -51,7 +62,7 @@ const generateWithProdia = async (prompt) => {
             Accept: 'image/png',
           },
           responseType: 'arraybuffer',
-          timeout: 45000,
+          timeout: 30000,
           validateStatus: (s) => s < 500,
         }
       );
@@ -65,7 +76,107 @@ const generateWithProdia = async (prompt) => {
   throw new Error('Prodia: all models failed');
 };
 
-// --- Hugging Face (many models) ---
+// --- Fal.ai (FLUX schnell — very fast) ---
+const generateWithFal = async (prompt, opts = {}) => {
+  const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
+  if (!key) throw new Error('FAL_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://queue.fal.run/fal-ai/flux/schnell',
+    {
+      prompt,
+      image_size: 'square_hd',
+      num_inference_steps: 4,
+      output_format: 'png',
+    },
+    {
+      headers: {
+        Authorization: `Key ${key}`,
+        'Content-Type': 'application/json',
+      },
+      responseType: 'json',
+      timeout: 30000,
+      validateStatus: (s) => s < 500,
+    }
+  );
+
+  if (response.status !== 200) throw new Error(`Fal.ai ${response.status}`);
+
+  const imgUrl = response.data?.images?.[0]?.url;
+  if (!imgUrl) throw new Error('Fal.ai: no image in response');
+
+  const imgRes = await axiosClient.get(imgUrl, { responseType: 'arraybuffer', timeout: 15000 });
+  return { imageBuffer: Buffer.from(imgRes.data), source: 'fal' };
+};
+
+// --- DeepInfra (FLUX klein) ---
+const generateWithDeepInfra = async (prompt, opts = {}) => {
+  const key = process.env.DEEPINFRA_API_KEY;
+  if (!key) throw new Error('DEEPINFRA_API_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://api.deepinfra.com/v1/openai/images/generations',
+    {
+      prompt,
+      model: 'black-forest-labs/FLUX-2-klein-4b',
+      size: '1024x1024',
+      n: 1,
+      response_format: 'b64_json',
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      responseType: 'json',
+      timeout: 45000,
+      validateStatus: (s) => s < 500,
+    }
+  );
+
+  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
+    throw new Error(`DeepInfra ${response.status}`);
+  }
+  return {
+    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
+    source: 'deepinfra',
+  };
+};
+
+// --- Together.ai (FLUX schnell free) ---
+const generateWithTogether = async (prompt, opts = {}) => {
+  const key = process.env.TOGETHER_API_KEY;
+  if (!key) throw new Error('TOGETHER_API_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://api.together.xyz/v1/images/generations',
+    {
+      prompt,
+      model: 'black-forest-labs/FLUX.1-schnell-Free',
+      steps: 20,
+      width: opts.width || 1024,
+      height: opts.height || 1024,
+      seed: opts.seed ?? Math.floor(Math.random() * 1000000),
+      response_format: 'base64',
+      output_format: 'png',
+    },
+    {
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      responseType: 'json',
+      timeout: 45000,
+    }
+  );
+
+  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
+    throw new Error(`Together ${response.status}`);
+  }
+  return {
+    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
+    source: 'together',
+  };
+};
+
+// --- Hugging Face (many models, sequential fallback within) ---
 const HF_MODELS = [
   'stabilityai/stable-diffusion-xl-base-1.0',
   'black-forest-labs/FLUX.1-schnell',
@@ -111,7 +222,7 @@ const generateWithHuggingFace = async (prompt) => {
   throw new Error('Hugging Face: all models failed');
 };
 
-// --- Replicate (try FLUX schnell, then SD) ---
+// --- Replicate (FLUX schnell + SD) ---
 const REPLICATE_MODELS = [
   { version: 'black-forest-labs/flux-schnell:bf53bdb93d739c9c915091cfa5f49ca662d11273a5eb30e7a2ec1939bcf27a00', inputKey: 'prompt', pollMs: 2000 },
   { version: 'stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf', inputKey: 'prompt', pollMs: 2000 },
@@ -153,106 +264,6 @@ const generateWithReplicate = async (prompt) => {
     }
   }
   throw new Error('Replicate: all models failed');
-};
-
-// --- Fal.ai ---
-const generateWithFal = async (prompt, opts = {}) => {
-  const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
-  if (!key) throw new Error('FAL_KEY not configured');
-
-  const response = await axiosClient.post(
-    'https://queue.fal.run/fal-ai/flux/schnell',
-    {
-      prompt,
-      image_size: 'square_hd',
-      num_inference_steps: 4,
-      output_format: 'png',
-    },
-    {
-      headers: {
-        Authorization: `Key ${key}`,
-        'Content-Type': 'application/json',
-      },
-      responseType: 'json',
-      timeout: 45000,
-      validateStatus: (s) => s < 500,
-    }
-  );
-
-  if (response.status !== 200) throw new Error(`Fal.ai ${response.status}`);
-
-  const imgUrl = response.data?.images?.[0]?.url;
-  if (!imgUrl) throw new Error('Fal.ai: no image in response');
-
-  const imgRes = await axiosClient.get(imgUrl, { responseType: 'arraybuffer' });
-  return { imageBuffer: Buffer.from(imgRes.data), source: 'fal' };
-};
-
-// --- DeepInfra ---
-const generateWithDeepInfra = async (prompt, opts = {}) => {
-  const key = process.env.DEEPINFRA_API_KEY;
-  if (!key) throw new Error('DEEPINFRA_API_KEY not configured');
-
-  const response = await axiosClient.post(
-    'https://api.deepinfra.com/v1/openai/images/generations',
-    {
-      prompt,
-      model: 'black-forest-labs/FLUX-2-klein-4b',
-      size: '1024x1024',
-      n: 1,
-      response_format: 'b64_json',
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      responseType: 'json',
-      timeout: 60000,
-      validateStatus: (s) => s < 500,
-    }
-  );
-
-  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
-    throw new Error(`DeepInfra ${response.status}`);
-  }
-  return {
-    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
-    source: 'deepinfra',
-  };
-};
-
-// --- Together.ai ---
-const generateWithTogether = async (prompt, opts = {}) => {
-  const key = process.env.TOGETHER_API_KEY;
-  if (!key) throw new Error('TOGETHER_API_KEY not configured');
-
-  const response = await axiosClient.post(
-    'https://api.together.xyz/v1/images/generations',
-    {
-      prompt,
-      model: 'black-forest-labs/FLUX.1-schnell-Free',
-      steps: 20,
-      width: opts.width || 1024,
-      height: opts.height || 1024,
-      seed: opts.seed ?? Math.floor(Math.random() * 1000000),
-      response_format: 'base64',
-      output_format: 'png',
-    },
-    {
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      responseType: 'json',
-      timeout: 60000,
-    }
-  );
-
-  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
-    throw new Error(`Together ${response.status}`);
-  }
-  return {
-    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
-    source: 'together',
-  };
 };
 
 // --- Segmind ---
@@ -298,7 +309,7 @@ const generateWithClipdrop = async (prompt) => {
   return { imageBuffer: Buffer.from(response.data), source: 'clipdrop' };
 };
 
-// --- Pollinations (free, no key) ---
+// --- Pollinations (free, no key — ultimate fallback) ---
 const buildPollinationsUrls = ({ encodedPrompt, width, height, seed }) => {
   const base = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
   const q = `?width=${width}&height=${height}&seed=${seed}`;
@@ -316,8 +327,8 @@ const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) 
     try {
       const response = await requestWithRetry(
         url,
-        { method: 'GET', responseType: 'arraybuffer', timeout: 20000 },
-        1
+        { method: 'GET', responseType: 'arraybuffer', timeout: 25000 },
+        2 // extra retry for free fallback
       );
       if (response.data && response.data.byteLength > 100) {
         return { imageBuffer: Buffer.from(response.data), source: 'pollinations' };
@@ -326,10 +337,12 @@ const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) 
       console.warn('Pollinations failed:', e.message);
     }
   }
-  throw new Error('Pollinations unavailable (530). Add an API key (Prodia, HF, Replicate, etc.)');
+  throw new Error('Pollinations unavailable. Add an API key (Prodia, HF, Replicate, etc.)');
 };
 
-// --- Main: try all providers in order ---
+// =============================================
+// MAIN: 2-Tier Parallel Racing Architecture
+// =============================================
 const generateImage = async (prompt, opts = {}) => {
   const start = Date.now();
   const encodedPrompt = encodeURIComponent(prompt);
@@ -337,24 +350,47 @@ const generateImage = async (prompt, opts = {}) => {
   const height = opts.height || 1024;
   const seed = opts.seed || Math.floor(Math.random() * 1000000);
 
-  const providers = [
+  // --- TIER 1: Fast providers — race them all simultaneously ---
+  const fastProviders = [
     process.env.PRODIA_API_KEY || process.env.PRODIA_LEGACY_API_KEY
-      ? { name: 'prodia', run: () => generateWithProdia(prompt) }
+      ? () => generateWithProdia(prompt).then(r => { r.tier = 'fast'; return r; })
       : null,
+    process.env.FAL_KEY || process.env.FAL_API_KEY
+      ? () => generateWithFal(prompt, opts).then(r => { r.tier = 'fast'; return r; })
+      : null,
+    process.env.DEEPINFRA_API_KEY
+      ? () => generateWithDeepInfra(prompt, opts).then(r => { r.tier = 'fast'; return r; })
+      : null,
+    process.env.TOGETHER_API_KEY
+      ? () => generateWithTogether(prompt, opts).then(r => { r.tier = 'fast'; return r; })
+      : null,
+  ].filter(Boolean);
+
+  if (fastProviders.length > 0) {
+    try {
+      // Promise.any — first successful result wins, all others are ignored
+      const result = await Promise.any(fastProviders.map(fn => fn()));
+      const latency = Date.now() - start;
+      console.log(`[image] FAST tier succeeded via ${result.source} (${latency}ms)`);
+      return {
+        imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
+        provider: result.source,
+        tier: 'fast',
+        latency,
+        prompt,
+      };
+    } catch (e) {
+      console.warn(`[image] Fast tier all failed (${Date.now() - start}ms), trying slow tier...`);
+    }
+  }
+
+  // --- TIER 2: Slower but reliable providers — sequential ---
+  const slowProviders = [
     process.env.HUGGING_FACE_API_KEY
       ? { name: 'huggingface', run: () => generateWithHuggingFace(prompt) }
       : null,
     process.env.REPLICATE_API_TOKEN
       ? { name: 'replicate', run: () => generateWithReplicate(prompt) }
-      : null,
-    process.env.FAL_KEY || process.env.FAL_API_KEY
-      ? { name: 'fal', run: () => generateWithFal(prompt, opts) }
-      : null,
-    process.env.DEEPINFRA_API_KEY
-      ? { name: 'deepinfra', run: () => generateWithDeepInfra(prompt, opts) }
-      : null,
-    process.env.TOGETHER_API_KEY
-      ? { name: 'together', run: () => generateWithTogether(prompt, opts) }
       : null,
     process.env.SEGMIND_API_KEY
       ? { name: 'segmind', run: () => generateWithSegmind(prompt, opts) }
@@ -362,25 +398,39 @@ const generateImage = async (prompt, opts = {}) => {
     process.env.CLIPDROP_API_KEY
       ? { name: 'clipdrop', run: () => generateWithClipdrop(prompt) }
       : null,
-    { name: 'pollinations', run: () => generateWithPollinations({ encodedPrompt, width, height, seed }) },
   ].filter(Boolean);
 
-  const errors = [];
-
-  for (const p of providers) {
+  for (const p of slowProviders) {
     try {
       const result = await p.run();
       const latency = Date.now() - start;
-      console.log(`[image] succeeded via ${result.source} (${latency}ms)`);
+      console.log(`[image] SLOW tier succeeded via ${result.source} (${latency}ms)`);
       return {
         imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
         provider: result.source,
+        tier: 'slow',
         latency,
         prompt,
       };
-    } catch (error) {
-      errors.push(`${p.name}: ${error.message}`);
+    } catch (e) {
+      console.warn(`[image] Slow tier ${p.name} failed:`, e.message);
     }
+  }
+
+  // --- TIER 3: Free fallback — Pollinations (no key required) ---
+  try {
+    const result = await generateWithPollinations({ encodedPrompt, width, height, seed });
+    const latency = Date.now() - start;
+    console.log(`[image] FREE tier succeeded via ${result.source} (${latency}ms)`);
+    return {
+      imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
+      provider: result.source,
+      tier: 'free',
+      latency,
+      prompt,
+    };
+  } catch (e) {
+    console.warn('[image] Free tier (Pollinations) also failed:', e.message);
   }
 
   throw new Error(
@@ -388,7 +438,9 @@ const generateImage = async (prompt, opts = {}) => {
   );
 };
 
-// --- Img2Img (Replicate) ---
+// =============================================
+// IMG2IMG (Replicate-based)
+// =============================================
 const generateImageToImageReplicate = async (imageDataUrl, prompt, opts = {}) => {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN not configured');

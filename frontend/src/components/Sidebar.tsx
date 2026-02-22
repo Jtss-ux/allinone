@@ -142,6 +142,12 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'converter-hub', label: 'Converters & Files 🔄', icon: '🔄' },
       ],
     },
+    {
+      category: 'AI DIRECTORY',
+      tools: [
+        { id: 'ai-tools-directory', label: 'AI Tools Directory 🧠', icon: '🧠' },
+      ],
+    },
   ];
 
   return (

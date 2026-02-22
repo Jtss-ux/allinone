@@ -75,6 +75,7 @@ import GamingDirectory from './tools/GamingDirectory';
 import PrivacyHub from './tools/PrivacyHub';
 import BusinessHub from './tools/BusinessHub';
 import ConverterHub from './tools/ConverterHub';
+import AIToolsDirectory from './tools/AIToolsDirectory';
 
 interface DashboardProps {
   section: string;
@@ -189,6 +190,8 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <BusinessHub />;
       case 'converter-hub':
         return <ConverterHub />;
+      case 'ai-tools-directory':
+        return <AIToolsDirectory />;
 
       // Image tools
       case 'image-generator':

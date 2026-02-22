@@ -11,25 +11,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || process.env.REPLIT_DEV_PORT || 5000;
 
-// API Keys Configuration
-const HUGGING_FACE_API_KEY = process.env.HUGGING_FACE_API_KEY || '';
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const LTX_API_KEY = process.env.LTX_API_KEY || '';
-
-// AI Models on Hugging Face
-const MODELS = {
-  // Image Generation - Using a working model
-  IMAGE: 'runwayml/stable-diffusion-v1-5',
-
-  // Audio Generation
-  AUDIO_BARK: 'suno/bark',
-  AUDIO_SPEECHT5: 'microsoft/speecht5_tts',
-
-  // Video Generation (placeholder - requires more setup)
-  VIDEO_ZEROS: 'damo-vilab/text-to-video-ms-1.7b',
-};
+// All API keys are read from process.env directly where needed.
+// Add keys as environment variables in Render/Railway — see .env.example for the full list.
 
 const imageRoutes = require('./src/routes/imageRoutes');
 const providerStatusRoutes = require('./src/routes/providerStatus');
@@ -226,11 +209,71 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
       }
     }
 
+    // Try Kokoro TTS via HuggingFace (free)
+    if (process.env.HUGGING_FACE_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
+          { inputs: text },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000
+          }
+        );
+        if (response.data && response.data.byteLength > 100) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          res.json({
+            success: true,
+            audioUrl: `data:audio/wav;base64,${base64Audio}`,
+            text: text,
+            provider: 'huggingface-kokoro'
+          });
+          return;
+        }
+      } catch (kokoroError) {
+        console.log('Kokoro TTS failed:', kokoroError.message);
+      }
+    }
+
+    // Try Groq Whisper / TTS (free tier)
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api.groq.com/openai/v1/audio/speech',
+          { model: 'playai-tts', input: text, voice: 'Arista-PlayAI', response_format: 'wav' },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000
+          }
+        );
+        if (response.data && response.data.byteLength > 100) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          res.json({
+            success: true,
+            audioUrl: `data:audio/wav;base64,${base64Audio}`,
+            text: text,
+            provider: 'groq-tts'
+          });
+          return;
+        }
+      } catch (groqError) {
+        console.log('Groq TTS failed:', groqError.message);
+      }
+    }
+
     // All fallbacks failed
     res.status(503).json({
       success: false,
       error: 'All audio generation services unavailable',
-      message: 'Please add OPENAI_API_KEY, ELEVENLABS_API_KEY, or RAPIDAPI_KEY to environment variables'
+      message: 'Please add OPENAI_API_KEY, ELEVENLABS_API_KEY, GROQ_API_KEY, or RAPIDAPI_KEY to environment variables'
     });
   } catch (error) {
     console.error('Audio generation error:', error.message);
@@ -700,7 +743,7 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (RAPIDAPI_KEY) {
+    if (process.env.RAPIDAPI_KEY) {
       try {
         const response = await axios.post(
           'https://gpt-summarization.p.rapidapi.com/summarize',
@@ -711,7 +754,7 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
           {
             headers: {
               'content-type': 'application/json',
-              'X-RapidAPI-Key': RAPIDAPI_KEY,
+              'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
               'X-RapidAPI-Host': 'gpt-summarization.p.rapidapi.com'
             }
           }
@@ -729,7 +772,7 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
     }
 
     // Fallback using OpenAI
-    if (OPENAI_API_KEY) {
+    if (process.env.OPENAI_API_KEY) {
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
@@ -742,7 +785,7 @@ app.post('/api/text/summarize', upload.none(), async (req, res) => {
         },
         {
           headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
             'Content-Type': 'application/json'
           }
         }
@@ -776,7 +819,7 @@ app.post('/api/image/remove-background', upload.single('image'), async (req, res
       return res.status(400).json({ error: 'Image file is required' });
     }
 
-    if (RAPIDAPI_KEY) {
+    if (process.env.RAPIDAPI_KEY) {
       try {
         // Read image file as base64
         const imageBuffer = fs.readFileSync(req.file.path);
@@ -790,7 +833,7 @@ app.post('/api/image/remove-background', upload.single('image'), async (req, res
           {
             headers: {
               'content-type': 'application/json',
-              'X-RapidAPI-Key': RAPIDAPI_KEY,
+              'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
               'X-RapidAPI-Host': 'background-removal.p.rapidapi.com'
             },
             responseType: 'arraybuffer'
@@ -1100,11 +1143,45 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
       );
     }
 
-    // 10. Fallback - Image sequence from Pollinations
+    // 10. Fal.ai AnimateDiff (if FAL_KEY is set)
+    if (process.env.FAL_KEY || process.env.FAL_API_KEY) {
+      const falKey = process.env.FAL_KEY || process.env.FAL_API_KEY;
+      apiAttempts.push(
+        axios.post(
+          'https://queue.fal.run/fal-ai/fast-animatediff/turbo/text-to-video',
+          {
+            prompt: prompt,
+            num_frames: 16,
+            num_inference_steps: 4,
+            guidance_scale: 1.0,
+            fps: 8
+          },
+          {
+            headers: {
+              'Authorization': `Key ${falKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000
+          }
+        ).then(response => {
+          const videoUrl = response.data?.video?.url;
+          if (!videoUrl) throw new Error('Fal: no video in response');
+          return {
+            success: true,
+            message: 'Video generated successfully',
+            videoUrl,
+            prompt,
+            provider: 'fal-animatediff'
+          };
+        }).catch(err => { throw new Error('Fal AnimateDiff: ' + err.message); })
+      );
+    }
+
+    // 11. Fallback - Image sequence from Pollinations (free, always available)
     apiAttempts.push(
       axios.get(
         `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true&seed=${Date.now()}`,
-        { responseType: 'arraybuffer', timeout: 8000 }
+        { responseType: 'arraybuffer', timeout: 15000 }
       ).then(response => {
         const base64Image = Buffer.from(response.data, 'binary').toString('base64');
         return {
@@ -1118,15 +1195,18 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
       }).catch(err => { throw new Error('Pollinations: ' + err.message); })
     );
 
-    // Race all video APIs - returns the FASTEST successful one!
-    const result = await Promise.race(apiAttempts);
+    // Promise.any — first SUCCESSFUL result wins (unlike Promise.race which rejects on first rejection)
+    const result = await Promise.any(apiAttempts);
     res.json(result);
 
   } catch (error) {
-    console.error('All video generation APIs failed:', error.message);
+    // Promise.any throws AggregateError when ALL promises reject
+    const messages = error.errors ? error.errors.map(e => e.message).join('; ') : error.message;
+    console.error('All video generation APIs failed:', messages);
     res.status(500).json({
       error: 'All video generation services failed',
-      message: 'Please try again or check API keys'
+      message: 'Please try again or check API keys',
+      details: messages
     });
   }
 });
