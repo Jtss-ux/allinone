@@ -17,6 +17,26 @@ interface Category {
 
 const defaultPlaylist = 'https://iptv-org.github.io/iptv/index.m3u';
 
+const PLAYLIST_SOURCES = [
+  { label: '🌍 All Channels', url: 'https://iptv-org.github.io/iptv/index.m3u' },
+  { label: '🇺🇸 USA', url: 'https://iptv-org.github.io/iptv/countries/us.m3u' },
+  { label: '🇬🇧 UK', url: 'https://iptv-org.github.io/iptv/countries/gb.m3u' },
+  { label: '🇮🇳 India', url: 'https://iptv-org.github.io/iptv/countries/in.m3u' },
+  { label: '🇫🇷 France', url: 'https://iptv-org.github.io/iptv/countries/fr.m3u' },
+  { label: '🇩🇪 Germany', url: 'https://iptv-org.github.io/iptv/countries/de.m3u' },
+  { label: '🇯🇵 Japan', url: 'https://iptv-org.github.io/iptv/countries/jp.m3u' },
+  { label: '🇧🇷 Brazil', url: 'https://iptv-org.github.io/iptv/countries/br.m3u' },
+  { label: '🇨🇦 Canada', url: 'https://iptv-org.github.io/iptv/countries/ca.m3u' },
+  { label: '🇦🇺 Australia', url: 'https://iptv-org.github.io/iptv/countries/au.m3u' },
+  { label: '🎬 Movies', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
+  { label: '📰 News', url: 'https://iptv-org.github.io/iptv/categories/news.m3u' },
+  { label: '⚽ Sports', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
+  { label: '🎵 Music', url: 'https://iptv-org.github.io/iptv/categories/music.m3u' },
+  { label: '👶 Kids', url: 'https://iptv-org.github.io/iptv/categories/kids.m3u' },
+  { label: '📚 Education', url: 'https://iptv-org.github.io/iptv/categories/education.m3u' },
+  { label: '🎭 Entertainment', url: 'https://iptv-org.github.io/iptv/categories/entertainment.m3u' },
+];
+
 const categories: Category[] = [
   { id: 'all', name: 'All Channels', icon: '📺' },
   { id: 'movies', name: 'Movies', icon: '🎬' },
@@ -28,8 +48,11 @@ const categories: Category[] = [
   { id: 'documentary', name: 'Documentary', icon: '📚' },
   { id: 'kids', name: 'Kids', icon: '👶' },
   { id: 'religious', name: 'Religious', icon: '✝️' },
-  { id: 'local', name: 'Local', icon: '🏠' },
-  { id: 'regional', name: 'Regional', icon: '🌍' },
+  { id: 'education', name: 'Education', icon: '🎓' },
+  { id: 'comedy', name: 'Comedy', icon: '😂' },
+  { id: 'cooking', name: 'Cooking', icon: '🍳' },
+  { id: 'travel', name: 'Travel', icon: '✈️' },
+  { id: 'science', name: 'Science', icon: '🔬' },
 ];
 
 export default function IPTVPlayer() {
@@ -54,13 +77,14 @@ export default function IPTVPlayer() {
   const loadPlaylist = async (url: string) => {
     setLoading(true);
     setError('');
-    
+
     try {
       const response = await fetch(url);
       const text = await response.text();
       const parsed = parseM3U(text);
       setChannels(parsed);
       setFilteredChannels(parsed);
+      setPlaylistUrl(url);
     } catch (err) {
       setError('Failed to load playlist. Try another URL.');
     } finally {
@@ -71,20 +95,31 @@ export default function IPTVPlayer() {
   const parseM3U = (content: string): Channel[] => {
     const lines = content.split('\n');
     const channels: Channel[] = [];
-    let currentChannel: Partial<Channel> = {};
+    let currentInfo: Partial<Channel> = {};
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
       if (line.startsWith('#EXTINF:')) {
-        const match = line.match(/group-title="([^"]*)"/);
-        currentChannel.group = match ? match[1] : 'Uncategorized';
-      } else if (line.startsWith('http')) {
-        currentChannel.url = line.trim();
-        if (currentChannel.name) {
-          channels.push(currentChannel as Channel);
-          currentChannel = {};
+        // Extract group-title
+        const groupMatch = line.match(/group-title="([^"]*)"/);
+        currentInfo.group = groupMatch ? groupMatch[1] : 'Uncategorized';
+
+        // Extract tvg-logo
+        const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+        currentInfo.logo = logoMatch ? logoMatch[1] : undefined;
+
+        // Extract channel name (everything after the last comma)
+        const commaIndex = line.lastIndexOf(',');
+        if (commaIndex !== -1) {
+          currentInfo.name = line.substring(commaIndex + 1).trim();
         }
-      } else if (line.trim() && !line.startsWith('#')) {
-        currentChannel.name = line.trim();
+      } else if (line.startsWith('http')) {
+        currentInfo.url = line;
+        if (currentInfo.name && currentInfo.url) {
+          channels.push(currentInfo as Channel);
+        }
+        currentInfo = {};
       }
     }
 
@@ -97,21 +132,24 @@ export default function IPTVPlayer() {
     // Filter by category
     if (selectedCategory !== 'all') {
       const categoryKeywords: Record<string, string[]> = {
-        movies: ['movie', 'cinema', 'film', 'hbo', 'netflix'],
-        cartoon: ['cartoon', 'anime', 'disney', 'nickelodeon', 'cartoon network'],
-        music: ['music', ' MTV', ' Vevo', 'concert'],
-        sports: ['sport', 'espn', 'fox sports', 'bein', 'football'],
-        news: ['news', 'bbc', 'cnn', 'cnbc'],
-        entertainment: ['entertainment', 'tv', 'show'],
-        documentary: ['doc', 'discovery', 'national geographic', 'history'],
-        kids: ['kids', 'baby', 'children', 'disney junior'],
-        religious: ['church', 'religious', 'faith', 'god'],
-        local: ['local', 'municipal'],
-        regional: ['regional', 'province', 'state'],
+        movies: ['movie', 'cinema', 'film', 'hbo', 'netflix', 'paramount', 'fox movie', 'action', 'thriller'],
+        cartoon: ['cartoon', 'anime', 'disney', 'nickelodeon', 'cartoon network', 'boomerang', 'toonami'],
+        music: ['music', 'mtv', 'vevo', 'concert', 'vh1', 'radio', 'hits'],
+        sports: ['sport', 'espn', 'fox sports', 'bein', 'football', 'cricket', 'nba', 'nfl', 'tennis', 'golf', 'racing'],
+        news: ['news', 'bbc', 'cnn', 'cnbc', 'msnbc', 'fox news', 'al jazeera', 'reuters', 'sky news', 'nbc'],
+        entertainment: ['entertainment', 'tv', 'show', 'reality', 'comedy central', 'tbs', 'bravo', 'e!'],
+        documentary: ['doc', 'discovery', 'national geographic', 'history', 'nature', 'planet', 'science channel'],
+        kids: ['kids', 'baby', 'children', 'disney junior', 'disney xd', 'pbs kids', 'sprout', 'nick jr'],
+        religious: ['church', 'religious', 'faith', 'god', 'christian', 'prayer', 'worship', 'biblical'],
+        education: ['education', 'learn', 'school', 'university', 'ted', 'course', 'lecture'],
+        comedy: ['comedy', 'funny', 'humor', 'stand-up', 'sitcom', 'laugh'],
+        cooking: ['cook', 'food', 'chef', 'kitchen', 'recipe', 'culinary', 'bake'],
+        travel: ['travel', 'adventure', 'explore', 'tourism', 'destination', 'world'],
+        science: ['science', 'technology', 'tech', 'space', 'nasa', 'physics', 'engineering'],
       };
 
       const keywords = categoryKeywords[selectedCategory] || [];
-      filtered = filtered.filter(ch => 
+      filtered = filtered.filter(ch =>
         keywords.some(kw => ch.name.toLowerCase().includes(kw.toLowerCase())) ||
         ch.group?.toLowerCase().includes(selectedCategory.toLowerCase())
       );
@@ -119,7 +157,7 @@ export default function IPTVPlayer() {
 
     // Filter by search
     if (searchQuery) {
-      filtered = filtered.filter(ch => 
+      filtered = filtered.filter(ch =>
         ch.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -131,7 +169,7 @@ export default function IPTVPlayer() {
     setCurrentChannel(channel);
     if (videoRef.current) {
       videoRef.current.src = channel.url;
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch(() => { });
     }
   };
 
@@ -152,20 +190,31 @@ export default function IPTVPlayer() {
         <div className="grid lg:grid-cols-3 gap-0">
           {/* Left Panel - Channel List */}
           <div className="lg:col-span-1 border-r border-gray-700 max-h-[600px] flex flex-col">
-            {/* Playlist URL Input */}
+            {/* Playlist Sources */}
             <div className="p-3 border-b border-gray-700">
-              <form onSubmit={handlePlaylistSubmit} className="flex gap-2">
+              <div className="flex gap-2">
+                <select
+                  value={playlistUrl}
+                  onChange={(e) => loadPlaylist(e.target.value)}
+                  className="flex-1 p-2 bg-gray-700 text-white text-sm rounded border border-gray-600"
+                >
+                  {PLAYLIST_SOURCES.map(src => (
+                    <option key={src.url} value={src.url}>{src.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 mt-2">
                 <input
                   type="text"
                   value={playlistUrl}
                   onChange={(e) => setPlaylistUrl(e.target.value)}
-                  placeholder="M3U Playlist URL"
-                  className="flex-1 p-2 bg-gray-700 text-white text-sm rounded border border-gray-600"
+                  placeholder="Custom M3U URL"
+                  className="flex-1 p-2 bg-gray-700 text-white text-xs rounded border border-gray-600"
                 />
-                <button type="submit" className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                <button onClick={() => loadPlaylist(playlistUrl)} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-xs">
                   Load
                 </button>
-              </form>
+              </div>
             </div>
 
             {/* Search */}
@@ -185,11 +234,10 @@ export default function IPTVPlayer() {
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-2 py-1 rounded text-xs whitespace-nowrap transition ${
-                    selectedCategory === cat.id
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`px-2 py-1 rounded text-xs whitespace-nowrap transition ${selectedCategory === cat.id
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
                 >
                   {cat.icon} {cat.name}
                 </button>
@@ -210,9 +258,8 @@ export default function IPTVPlayer() {
                     <button
                       key={index}
                       onClick={() => playChannel(channel)}
-                      className={`w-full p-3 text-left hover:bg-gray-700 transition ${
-                        currentChannel?.url === channel.url ? 'bg-green-900' : ''
-                      }`}
+                      className={`w-full p-3 text-left hover:bg-gray-700 transition ${currentChannel?.url === channel.url ? 'bg-green-900' : ''
+                        }`}
                     >
                       <div className="font-medium text-white truncate">{channel.name}</div>
                       <div className="text-xs text-gray-400">{channel.group || 'Uncategorized'}</div>

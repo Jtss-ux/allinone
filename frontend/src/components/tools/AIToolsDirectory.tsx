@@ -67,6 +67,24 @@ const AI_TOOLS: AITool[] = [
 
     // --- Open LLMs ---
     { id: 33, name: 'Minimax M2.1', category: 'Open LLMs', link: 'https://huggingface.co/MiniMaxAI/MiniMax-M2.1', description: 'Multimodal reasoning LLM, open-source', icon: '🤖', free: true, hasApi: true, tags: ['LLM', 'Multimodal', 'Open-Source'] },
+
+    // --- AI Photo Enhancement ---
+    { id: 34, name: 'Remini', category: 'AI Photo Enhancement', link: 'https://remini.ai', description: 'Restore old photos and enhance faces with AI', icon: '✨', free: true, hasApi: false, tags: ['Photo', 'Enhance', 'Restore'] },
+    { id: 35, name: 'VanceAI', category: 'AI Photo Enhancement', link: 'https://vanceai.com', description: 'AI image upscaler, denoiser, and sharpener', icon: '📐', free: true, hasApi: true, tags: ['Photo', 'Upscale', 'Denoise'] },
+    { id: 36, name: 'Topaz Photo AI', category: 'AI Photo Enhancement', link: 'https://topazlabs.com', description: 'Professional noise removal, sharpening, upscaling', icon: '💎', free: false, hasApi: false, tags: ['Photo', 'Professional', 'Desktop'] },
+    { id: 37, name: "Let's Enhance", category: 'AI Photo Enhancement', link: 'https://letsenhance.io', description: 'AI upscaling up to 16x resolution', icon: '🔍', free: true, hasApi: true, tags: ['Photo', 'Upscale', '16x'] },
+    { id: 38, name: 'Fotor', category: 'AI Photo Enhancement', link: 'https://fotor.com', description: 'All-in-one online photo editor with AI tools', icon: '🖼️', free: true, hasApi: false, tags: ['Photo', 'Editor', 'All-in-One'] },
+    { id: 39, name: 'BeFunky', category: 'AI Photo Enhancement', link: 'https://befunky.com', description: 'Photo editor, collage maker, and graphic designer', icon: '🎭', free: true, hasApi: false, tags: ['Photo', 'Collage', 'Design'] },
+    { id: 40, name: 'PicWish', category: 'AI Photo Enhancement', link: 'https://picwish.com', description: 'AI background remover and photo enhancer', icon: '🪄', free: true, hasApi: true, tags: ['Photo', 'Background', 'Remove'] },
+    { id: 41, name: 'Luminar Neo', category: 'AI Photo Enhancement', link: 'https://skylum.com/luminar', description: 'AI photo editor for creators and photographers', icon: '🌟', free: false, hasApi: false, tags: ['Photo', 'Pro', 'Desktop'] },
+    { id: 42, name: 'Cutout.pro', category: 'AI Photo Enhancement', link: 'https://cutout.pro', description: 'AI cutout, bg removal, and face enhancement', icon: '✂️', free: true, hasApi: true, tags: ['Photo', 'Cutout', 'Background'] },
+    { id: 43, name: 'HitPaw Photo Enhancer', category: 'AI Photo Enhancement', link: 'https://hitpaw.com/photo-enhancer.html', description: 'One-click AI enhancement with 4 AI models', icon: '🐾', free: false, hasApi: false, tags: ['Photo', 'One-Click', '4 Models'] },
+
+    // --- Virtual Photo Booths ---
+    { id: 44, name: 'Simple Booth', category: 'Photo Booths', link: 'https://simplebooth.com', description: 'Virtual and live photo booth for events', icon: '📷', free: false, hasApi: false, tags: ['Booth', 'Events', 'Live'] },
+    { id: 45, name: 'Sparkbooth', category: 'Photo Booths', link: 'https://sparkbooth.com', description: 'Customizable photo booth software', icon: '✨', free: false, hasApi: false, tags: ['Booth', 'Software', 'Custom'] },
+    { id: 46, name: 'dslrBooth', category: 'Photo Booths', link: 'https://dslrbooth.com', description: 'Professional DSLR photo booth with sharing', icon: '📸', free: false, hasApi: false, tags: ['Booth', 'DSLR', 'Pro'] },
+    { id: 47, name: 'Snappic', category: 'Photo Booths', link: 'https://snappic.com', description: 'Photo booth platform with AI filters', icon: '🤳', free: false, hasApi: false, tags: ['Booth', 'AI Filters', 'Brand'] },
 ];
 
 const CATEGORIES = [
@@ -81,6 +99,8 @@ const CATEGORIES = [
     'Image Editing',
     'Portrait Video',
     'Open LLMs',
+    'AI Photo Enhancement',
+    'Photo Booths',
 ];
 
 export default function AIToolsDirectory() {
@@ -187,8 +207,8 @@ export default function AIToolsDirectory() {
                                 key={cat}
                                 onClick={() => setActiveCategory(cat)}
                                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${activeCategory === cat
-                                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                     }`}
                             >
                                 {cat} ({categoryCount(cat)})

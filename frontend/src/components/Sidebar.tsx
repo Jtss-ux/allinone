@@ -116,6 +116,10 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'email-writer', label: 'Email Writer 📧', icon: '📧' },
         { id: 'ppt-generator', label: 'PPT Generator 📊', icon: '📊' },
         { id: 'hashtag-generator', label: 'Hashtag Generator #️⃣', icon: '#️⃣' },
+        { id: 'social-post', label: 'Social Post Writer 📱', icon: '📱' },
+        { id: 'seo-generator', label: 'SEO Meta Generator 🔍', icon: '🔍' },
+        { id: 'story-writer', label: 'Story Writer 📖', icon: '📖' },
+        { id: 'resume-builder', label: 'Resume Builder 📄', icon: '📄' },
       ],
     },
     {
@@ -126,6 +130,7 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
         { id: 'mockup-generator', label: 'Mockup Generator', icon: '📱' },
         { id: 'icon-generator', label: 'Icon Generator', icon: '🔷' },
         { id: 'change-camera', label: 'Change Camera', icon: '📷' },
+        { id: 'logo-generator', label: 'Logo Generator 🎨', icon: '🎨' },
         { id: 'sketch-to-image', label: 'Sketch to Image', icon: '🎨' },
         { id: 'meme-generator', label: 'Meme Generator 🧠', icon: '🧠' },
         { id: 'image-tool', label: 'Image Tools 🛠️', icon: '🛠️' },

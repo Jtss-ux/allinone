@@ -76,6 +76,11 @@ import PrivacyHub from './tools/PrivacyHub';
 import BusinessHub from './tools/BusinessHub';
 import ConverterHub from './tools/ConverterHub';
 import AIToolsDirectory from './tools/AIToolsDirectory';
+import LogoGenerator from './tools/LogoGenerator';
+import StoryWriter from './tools/StoryWriter';
+import SEOGenerator from './tools/SEOGenerator';
+import SocialPostGenerator from './tools/SocialPostGenerator';
+import ResumeBuilder from './tools/ResumeBuilder';
 
 interface DashboardProps {
   section: string;
@@ -192,6 +197,16 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <ConverterHub />;
       case 'ai-tools-directory':
         return <AIToolsDirectory />;
+      case 'logo-generator':
+        return <LogoGenerator />;
+      case 'story-writer':
+        return <StoryWriter />;
+      case 'seo-generator':
+        return <SEOGenerator />;
+      case 'social-post':
+        return <SocialPostGenerator />;
+      case 'resume-builder':
+        return <ResumeBuilder />;
 
       // Image tools
       case 'image-generator':

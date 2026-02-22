@@ -27,8 +27,8 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 app.use('/api/image', imageRoutes);
 app.use('/api/provider-status', providerStatusRoutes);
 
@@ -38,7 +38,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-// File upload setup
+// File upload setup — 200MB max per file
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -48,7 +48,10 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 200 * 1024 * 1024 } // 200MB
+});
 
 // Routes
 
@@ -64,7 +67,7 @@ app.get('/api/health', (req, res) => {
 
 // Image generation is handled by imageRoutes (app.use('/api/image', imageRoutes))
 
-// Audio Generation - Multiple API fallback system
+// Audio Generation - Multiple API fallback system with response validation
 app.post('/api/audio/generate', upload.none(), async (req, res) => {
   try {
     const { text, voice = 'alloy' } = req.body;
@@ -73,173 +76,18 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Try OpenAI TTS first
-    if (process.env.OPENAI_API_KEY) {
+    // Helper: check if arraybuffer is actually audio (not error JSON)
+    const isValidAudio = (data) => {
+      if (!data || data.byteLength < 500) return false;
+      // Check if response is actually JSON error
       try {
-        const response = await axios.post(
-          'https://api.openai.com/v1/audio/speech',
-          {
-            model: 'tts-1',
-            input: text,
-            voice: voice
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            responseType: 'arraybuffer'
-          }
-        );
+        const str = Buffer.from(data).toString('utf-8', 0, 50);
+        if (str.startsWith('{') || str.startsWith('{"')) return false;
+      } catch (e) { }
+      return true;
+    };
 
-        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-        const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
-
-        res.json({
-          success: true,
-          audioUrl: audioUrl,
-          text: text,
-          provider: 'openai'
-        });
-        return;
-      } catch (openaiError) {
-        console.log('OpenAI TTS failed, trying ElevenLabs:', openaiError.message);
-      }
-    }
-
-    // Try ElevenLabs
-    if (process.env.ELEVENLABS_API_KEY) {
-      try {
-        const response = await axios.post(
-          'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
-          {
-            text: text,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.5
-            }
-          },
-          {
-            headers: {
-              'xi-api-key': process.env.ELEVENLABS_API_KEY,
-              'Content-Type': 'application/json'
-            },
-            responseType: 'arraybuffer'
-          }
-        );
-
-        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-        const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
-
-        res.json({
-          success: true,
-          audioUrl: audioUrl,
-          text: text,
-          provider: 'elevenlabs'
-        });
-        return;
-      } catch (elevenError) {
-        console.log('ElevenLabs failed, trying RapidAPI:', elevenError.message);
-      }
-    }
-
-    // Try RapidAPI - Voice Generator
-    if (process.env.RAPIDAPI_KEY) {
-      try {
-        const response = await axios.post(
-          'https://voice-generator.p.rapidapi.com/generate-audio',
-          {
-            text: text,
-            voice: 'en-US-AriaNeural'
-          },
-          {
-            headers: {
-              'content-type': 'application/json',
-              'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-              'X-RapidAPI-Host': 'voice-generator.p.rapidapi.com'
-            },
-            responseType: 'arraybuffer'
-          }
-        );
-
-        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-        const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
-
-        res.json({
-          success: true,
-          audioUrl: audioUrl,
-          text: text,
-          provider: 'rapidapi'
-        });
-        return;
-      } catch (rapidError) {
-        console.log('RapidAPI voice failed, trying Hugging Face:', rapidError.message);
-      }
-    }
-
-    // Try Hugging Face Bark
-    if (process.env.HUGGING_FACE_API_KEY) {
-      try {
-        const response = await axios.post(
-          'https://api-inference.huggingface.co/models/suno/bark',
-          { inputs: text },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            responseType: 'arraybuffer',
-            timeout: 60000
-          }
-        );
-
-        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-        const audioUrl = `data:audio/wav;base64,${base64Audio}`;
-
-        res.json({
-          success: true,
-          audioUrl: audioUrl,
-          text: text,
-          provider: 'huggingface'
-        });
-        return;
-      } catch (hfError) {
-        console.log('Hugging Face Bark failed:', hfError.message);
-      }
-    }
-
-    // Try Kokoro TTS via HuggingFace (free)
-    if (process.env.HUGGING_FACE_API_KEY) {
-      try {
-        const response = await axios.post(
-          'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
-          { inputs: text },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            responseType: 'arraybuffer',
-            timeout: 30000
-          }
-        );
-        if (response.data && response.data.byteLength > 100) {
-          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-          res.json({
-            success: true,
-            audioUrl: `data:audio/wav;base64,${base64Audio}`,
-            text: text,
-            provider: 'huggingface-kokoro'
-          });
-          return;
-        }
-      } catch (kokoroError) {
-        console.log('Kokoro TTS failed:', kokoroError.message);
-      }
-    }
-
-    // Try Groq Whisper / TTS (free tier)
+    // 1. Try Groq TTS first (free, fast, reliable)
     if (process.env.GROQ_API_KEY) {
       try {
         const response = await axios.post(
@@ -254,18 +102,163 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
             timeout: 30000
           }
         );
-        if (response.data && response.data.byteLength > 100) {
+        if (isValidAudio(response.data)) {
           const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-          res.json({
+          return res.json({
             success: true,
             audioUrl: `data:audio/wav;base64,${base64Audio}`,
             text: text,
             provider: 'groq-tts'
           });
-          return;
         }
       } catch (groqError) {
-        console.log('Groq TTS failed:', groqError.message);
+        console.log('Groq TTS failed:', groqError.response?.status, groqError.message);
+      }
+    }
+
+    // 2. Try ElevenLabs
+    if (process.env.ELEVENLABS_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
+          {
+            text: text,
+            model_id: 'eleven_monolingual_v1',
+            voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+          },
+          {
+            headers: {
+              'xi-api-key': process.env.ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg'
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000
+          }
+        );
+        if (isValidAudio(response.data)) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          return res.json({
+            success: true,
+            audioUrl: `data:audio/mp3;base64,${base64Audio}`,
+            text: text,
+            provider: 'elevenlabs'
+          });
+        } else {
+          console.log('ElevenLabs returned non-audio response:', Buffer.from(response.data).toString('utf-8', 0, 200));
+        }
+      } catch (elevenError) {
+        console.log('ElevenLabs failed:', elevenError.response?.status, elevenError.message);
+      }
+    }
+
+    // 3. Try OpenAI TTS
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api.openai.com/v1/audio/speech',
+          { model: 'tts-1', input: text, voice: voice },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000
+          }
+        );
+        if (isValidAudio(response.data)) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          return res.json({ success: true, audioUrl: `data:audio/mp3;base64,${base64Audio}`, text, provider: 'openai' });
+        }
+      } catch (openaiError) {
+        console.log('OpenAI TTS failed:', openaiError.response?.status, openaiError.message);
+      }
+    }
+
+    // 4. Try RapidAPI Voice
+    if (process.env.RAPIDAPI_KEY) {
+      try {
+        const response = await axios.post(
+          'https://large-text-to-speech.p.rapidapi.com/tts',
+          { text: text },
+          {
+            headers: {
+              'content-type': 'application/json',
+              'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+              'X-RapidAPI-Host': 'large-text-to-speech.p.rapidapi.com'
+            },
+            timeout: 30000
+          }
+        );
+        if (response.data?.url) {
+          return res.json({ success: true, audioUrl: response.data.url, text, provider: 'rapidapi' });
+        }
+        if (response.data?.id) {
+          // Polling-based API
+          for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const check = await axios.get(
+              `https://large-text-to-speech.p.rapidapi.com/tts?id=${response.data.id}`,
+              { headers: { 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY, 'X-RapidAPI-Host': 'large-text-to-speech.p.rapidapi.com' } }
+            );
+            if (check.data?.url) {
+              return res.json({ success: true, audioUrl: check.data.url, text, provider: 'rapidapi' });
+            }
+          }
+        }
+      } catch (rapidError) {
+        console.log('RapidAPI voice failed:', rapidError.response?.status, rapidError.message);
+      }
+    }
+
+    // 5. Try HuggingFace Kokoro (lightweight, fast)
+    if (process.env.HUGGING_FACE_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
+          { inputs: text },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`,
+              'Content-Type': 'application/json',
+              'X-Wait-For-Model': 'true'
+            },
+            responseType: 'arraybuffer',
+            timeout: 120000
+          }
+        );
+        if (isValidAudio(response.data)) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          return res.json({ success: true, audioUrl: `data:audio/wav;base64,${base64Audio}`, text, provider: 'huggingface-kokoro' });
+        }
+      } catch (kokoroError) {
+        console.log('Kokoro TTS failed:', kokoroError.response?.status, kokoroError.message);
+      }
+    }
+
+    // 6. Try HuggingFace Bark (slower but reliable)
+    if (process.env.HUGGING_FACE_API_KEY) {
+      try {
+        const response = await axios.post(
+          'https://api-inference.huggingface.co/models/suno/bark-small',
+          { inputs: text },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`,
+              'Content-Type': 'application/json',
+              'X-Wait-For-Model': 'true'
+            },
+            responseType: 'arraybuffer',
+            timeout: 120000
+          }
+        );
+        if (isValidAudio(response.data)) {
+          const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+          return res.json({ success: true, audioUrl: `data:audio/wav;base64,${base64Audio}`, text, provider: 'huggingface-bark' });
+        }
+      } catch (hfError) {
+        console.log('Hugging Face Bark failed:', hfError.response?.status, hfError.message);
       }
     }
 
@@ -273,7 +266,7 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
     res.status(503).json({
       success: false,
       error: 'All audio generation services unavailable',
-      message: 'Please add OPENAI_API_KEY, ELEVENLABS_API_KEY, GROQ_API_KEY, or RAPIDAPI_KEY to environment variables'
+      message: 'All TTS providers failed. Check Render logs for details.'
     });
   } catch (error) {
     console.error('Audio generation error:', error.message);
@@ -731,6 +724,126 @@ app.post('/api/hashtags/generate', upload.none(), async (req, res) => {
   } catch (error) {
     console.error('Hashtag generation error:', error.message);
     res.status(500).json({ error: 'Failed to generate hashtags', message: error.message });
+  }
+});
+
+// AI Logo Generator — generates a logo prompt + image
+app.post('/api/logo/generate', upload.none(), async (req, res) => {
+  try {
+    const { brandName, style = 'modern', colors = '', industry = '' } = req.body;
+    if (!brandName) return res.status(400).json({ error: 'Brand name is required' });
+
+    const prompt = `professional ${style} logo for "${brandName}"${industry ? ` in the ${industry} industry` : ''}${colors ? `, using colors: ${colors}` : ''}, clean vector design, centered, isolated on white background, minimalist, high quality, no text except the brand name`;
+
+    const { generateImage } = require('./src/imageService');
+    const result = await generateImage(prompt, { width: 1024, height: 1024 });
+
+    res.json({
+      success: true,
+      imageUrl: result.imageUrl,
+      imageBase64: result.imageUrl,
+      prompt,
+      provider: result.provider,
+      latency: result.latency,
+    });
+  } catch (error) {
+    console.error('Logo generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate logo', message: error.message });
+  }
+});
+
+// AI Story Writer — generates creative stories with genres
+app.post('/api/story/generate', upload.none(), async (req, res) => {
+  try {
+    const { prompt, genre = 'fantasy', length = 'medium', tone = 'engaging' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Story idea is required' });
+
+    const lengthGuide = { short: '500-800 words', medium: '1000-1500 words', long: '2000-3000 words' };
+    const messages = [
+      { role: 'system', content: `You are a talented ${genre} fiction writer. Write a ${tone} story of ${lengthGuide[length] || '1000-1500 words'}. Include vivid descriptions, dialogue, and a satisfying ending. Use proper paragraph breaks and formatting.` },
+      { role: 'user', content: `Write a ${genre} story about: ${prompt}` },
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, story: result.response, genre, provider: result.provider });
+  } catch (error) {
+    console.error('Story generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate story', message: error.message });
+  }
+});
+
+// SEO Meta Generator — generates SEO title, description, keywords
+app.post('/api/seo/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, url = '', type = 'webpage' } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic or page content is required' });
+
+    const messages = [
+      {
+        role: 'system', content: `You are an SEO expert. Generate optimized meta tags for a ${type}. Return ONLY valid JSON in this exact format:
+{"title":"SEO optimized title under 60 chars","description":"Compelling meta description under 160 chars","keywords":["keyword1","keyword2","keyword3"],"og_title":"Open Graph title","og_description":"Social sharing description","h1":"Proposed H1 heading","slug":"url-friendly-slug"}` },
+      { role: 'user', content: `Generate SEO meta for: ${topic}${url ? ` (URL: ${url})` : ''}` },
+    ];
+
+    const result = await chatWithFallback(messages);
+
+    // Parse the JSON
+    let seo;
+    try {
+      const jsonMatch = result.response.match(/\{[\s\S]*\}/);
+      seo = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch (e) { seo = null; }
+
+    res.json({ success: true, seo: seo || { raw: result.response }, provider: result.provider });
+  } catch (error) {
+    console.error('SEO generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate SEO meta', message: error.message });
+  }
+});
+
+// Social Media Post Generator — creates platform-specific posts
+app.post('/api/social/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, platform = 'twitter', tone = 'professional', includeEmoji = true } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const platformGuides = {
+      twitter: 'Keep under 280 characters. Use 2-3 relevant hashtags. Be punchy and engaging.',
+      instagram: 'Write a compelling caption with line breaks. Use 15-20 relevant hashtags at the end. Include emojis.',
+      linkedin: 'Write a professional post of 200-300 words. Use line breaks for readability. Include 3-5 hashtags. Add a call to action.',
+      facebook: 'Write an engaging post of 100-200 words. Use a conversational tone. Include a question or call to action.',
+      tiktok: 'Write a short, catchy caption under 150 characters. Use trending hashtags. Be Gen-Z friendly.',
+    };
+
+    const messages = [
+      { role: 'system', content: `You are a social media expert. Create a ${platform} post. ${platformGuides[platform] || platformGuides.twitter} Tone: ${tone}. ${includeEmoji ? 'Include relevant emojis.' : 'No emojis.'}` },
+      { role: 'user', content: `Create a ${platform} post about: ${topic}` },
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, post: result.response, platform, provider: result.provider });
+  } catch (error) {
+    console.error('Social post generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate social post', message: error.message });
+  }
+});
+
+// Resume Builder — generates a formatted resume from details
+app.post('/api/resume/generate', upload.none(), async (req, res) => {
+  try {
+    const { name, title, experience = '', education = '', skills = '', summary = '' } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+
+    const messages = [
+      { role: 'system', content: `You are an expert resume writer. Create a professional, ATS-friendly resume in clean markdown format. Use clear section headings (## Experience, ## Education, ## Skills, ## Summary). Make it concise, impactful, and well-structured. Use bullet points with action verbs.` },
+      { role: 'user', content: `Create a resume for:\nName: ${name}\nTitle: ${title || 'Professional'}\n${experience ? `Experience: ${experience}` : ''}\n${education ? `Education: ${education}` : ''}\n${skills ? `Skills: ${skills}` : ''}\n${summary ? `Summary: ${summary}` : ''}` },
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, resume: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Resume generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate resume', message: error.message });
   }
 });
 
