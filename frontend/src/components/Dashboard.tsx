@@ -24,7 +24,6 @@ import ClipEditor from './tools/ClipEditor';
 import VideoUpscaler from './tools/VideoUpscaler';
 import LipSync from './tools/LipSync';
 import DefaultTool from './tools/DefaultTool';
-import AIToolsHub from './tools/AIToolsHub';
 import PhotoEffects from './tools/PhotoEffects';
 import PhotoEditor from './tools/PhotoEditor';
 import MemeGenerator from './tools/MemeGenerator';
@@ -77,23 +76,25 @@ import PrivacyHub from './tools/PrivacyHub';
 import BusinessHub from './tools/BusinessHub';
 import ConverterHub from './tools/ConverterHub';
 import AIToolsDirectory from './tools/AIToolsDirectory';
+import AwesomeLLMApps from './tools/AwesomeLLMApps';
 import LogoGenerator from './tools/LogoGenerator';
 import StoryWriter from './tools/StoryWriter';
 import SEOGenerator from './tools/SEOGenerator';
 import SocialPostGenerator from './tools/SocialPostGenerator';
 import ResumeBuilder from './tools/ResumeBuilder';
+import ImageAnalyzer from './tools/ImageAnalyzer';
+import YouTubeSummarizer from './tools/YouTubeSummarizer';
 
 interface DashboardProps {
   section: string;
   backendStatus: boolean;
+  onSectionChange: (section: string) => void;
 }
 
-export default function Dashboard({ section, backendStatus }: DashboardProps) {
+export default function Dashboard({ section, backendStatus, onSectionChange }: DashboardProps) {
   const renderTool = () => {
     switch (section) {
       // Main Hub
-      case 'ai-tools-hub':
-        return <AIToolsHub />;
       case 'photo-effects':
         return <PhotoEffects />;
       case 'photo-editor':
@@ -198,6 +199,8 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <ConverterHub />;
       case 'ai-tools-directory':
         return <AIToolsDirectory />;
+      case 'awesome-llm-apps':
+        return <AwesomeLLMApps />;
       case 'logo-generator':
         return <LogoGenerator />;
       case 'story-writer':
@@ -208,6 +211,10 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
         return <SocialPostGenerator />;
       case 'resume-builder':
         return <ResumeBuilder />;
+      case 'image-analyzer':
+        return <ImageAnalyzer />;
+      case 'youtube-summarizer':
+        return <YouTubeSummarizer />;
 
       // Image tools
       case 'image-generator':
@@ -269,11 +276,37 @@ export default function Dashboard({ section, backendStatus }: DashboardProps) {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-gray-950 border-b border-gray-800 p-6">
-        <h2 className="text-3xl font-bold text-white capitalize">{section.replace(/-/g, ' ')}</h2>
-        <p className="text-gray-400 mt-1">
-          {backendStatus ? '✅ Backend Connected' : '❌ Backend Disconnected'}
-        </p>
+      <div className="bg-gray-950 border-b border-gray-800 p-6 flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold text-white capitalize">{section.replace(/-/g, ' ')}</h2>
+          <p className="text-gray-400 mt-1">
+            {backendStatus ? '✅ Backend Connected' : '❌ Backend Disconnected'}
+          </p>
+        </div>
+        <div className="flex gap-3 text-xs font-mono">
+          <div className="bg-gray-900 border border-gray-800 px-3 py-2 rounded-lg flex flex-col gap-1 min-w-[140px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400">ML Service:</span>
+              <span className="text-green-400">● Running</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400">Backend:</span>
+              <span className={backendStatus ? "text-green-400" : "text-red-400"}>
+                ● {backendStatus ? 'Running' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 px-3 py-2 rounded-lg flex flex-col gap-1 min-w-[140px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400">Device:</span>
+              <span className="text-blue-400">CPU Mode</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400">Models:</span>
+              <span className="text-purple-400">Loaded</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Content */}

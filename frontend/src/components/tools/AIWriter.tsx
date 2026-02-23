@@ -20,13 +20,16 @@ const LENGTHS = [
     { id: 'short', name: 'Short (200-300 words)' },
     { id: 'medium', name: 'Medium (500-700 words)' },
     { id: 'long', name: 'Long (1000-1500 words)' },
+    { id: 'custom', name: 'Custom (Specify words)' },
 ];
 
 export default function AIWriter() {
+    const [preferredModel, setPreferredModel] = useState('premium');
     const [topic, setTopic] = useState('');
     const [contentType, setContentType] = useState('blog post');
     const [tone, setTone] = useState('Informative');
     const [length, setLength] = useState('medium');
+    const [customWordCount, setCustomWordCount] = useState(500);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState('');
     const [provider, setProvider] = useState('');
@@ -38,8 +41,13 @@ export default function AIWriter() {
         setLoading(true); setError(''); setResult('');
 
         try {
+            const actualLength = length === 'custom' ? `${customWordCount} words` : length;
             const response = await axios.post(backendApi('/api/content/generate'), {
-                topic, type: contentType, tone: tone.toLowerCase(), length,
+                topic, 
+                type: contentType, 
+                tone: tone.toLowerCase(), 
+                length: actualLength,
+                model: preferredModel === 'claude' ? 'anthropic/claude-3.5-sonnet' : undefined
             });
             if (response.data.success) {
                 setResult(response.data.content);
@@ -94,7 +102,15 @@ export default function AIWriter() {
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Intelligence Model</label>
+                            <select value={preferredModel} onChange={(e) => setPreferredModel(e.target.value)}
+                                className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none">
+                                <option value="premium">Standard Premium (Cascading)</option>
+                                <option value="claude">Direct Claude 3.5 Sonnet (Direct API)</option>
+                            </select>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Tone</label>
                             <select value={tone} onChange={(e) => setTone(e.target.value)}
@@ -104,10 +120,22 @@ export default function AIWriter() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Length</label>
-                            <select value={length} onChange={(e) => setLength(e.target.value)}
-                                className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none">
-                                {LENGTHS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                            </select>
+                            <div className="flex gap-2">
+                                <select value={length} onChange={(e) => setLength(e.target.value)}
+                                    className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none">
+                                    {LENGTHS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                </select>
+                                {length === 'custom' && (
+                                    <input
+                                        type="number"
+                                        value={customWordCount}
+                                        onChange={(e) => setCustomWordCount(Number(e.target.value))}
+                                        min="50" max="3000"
+                                        className="w-32 p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none"
+                                        placeholder="Words"
+                                    />
+                                )}
+                            </div>
                         </div>
                     </div>
 

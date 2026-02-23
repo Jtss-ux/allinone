@@ -13,7 +13,7 @@ const upload = multer({ storage });
 
 router.post('/generate', async (req, res) => {
   try {
-    const { prompt, negative_prompt, num_inference_steps, guidance_scale, width, height, seed } = req.body;
+    const { prompt, negative_prompt, num_inference_steps, guidance_scale, width, height, seed, provider } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -34,6 +34,7 @@ router.post('/generate', async (req, res) => {
       width: width ? parseInt(width, 10) : 1024,
       height: height ? parseInt(height, 10) : 1024,
       seed: seed ? parseInt(seed, 10) : undefined,
+      provider: provider || undefined,
     });
 
     res.json({
@@ -94,7 +95,7 @@ router.post('/img2img', upload.single('image'), async (req, res) => {
       jobId: `img2img-${Date.now()}`,
     });
   } catch (error) {
-    console.error('Image img2img error:', error.message);
+    console.error(`[img2img] Error: ${error.message}`);
     res.status(500).json({ error: 'Failed to transform image', message: error.message });
   }
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Script from 'next/script';
 
 interface Channel {
   name: string;
@@ -167,9 +168,34 @@ export default function IPTVPlayer() {
 
   const playChannel = (channel: Channel) => {
     setCurrentChannel(channel);
+    setError('');
+
     if (videoRef.current) {
-      videoRef.current.src = channel.url;
-      videoRef.current.play().catch(() => { });
+      const video = videoRef.current;
+      const hlsUrl = channel.url.includes('.m3u8') || channel.url.includes('.m3u');
+
+      if (hlsUrl && (window as any).Hls) {
+        const Hls = (window as any).Hls;
+        if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(channel.url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(() => { });
+          });
+          hls.on(Hls.Events.ERROR, (event: any, data: any) => {
+            if (data.fatal) {
+              setError('Failed to play this channel. The stream may be offline or in an unsupported format.');
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = channel.url;
+          video.play().catch(() => { });
+        }
+      } else {
+        video.src = channel.url;
+        video.play().catch(() => { });
+      }
     }
   };
 
@@ -180,6 +206,10 @@ export default function IPTVPlayer() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      <Script
+        src="https://cdn.jsdelivr.net/npm/hls.js@latest"
+        strategy="lazyOnload"
+      />
       <div className="bg-gray-800 rounded-lg overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-900 via-purple-900 to-pink-900 p-4">

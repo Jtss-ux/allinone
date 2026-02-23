@@ -39,8 +39,13 @@ export default function SnakeGame() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent scrolling for game keys
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
+
       if (gameOver) return;
-      
+
       switch (e.key) {
         case 'ArrowUp':
           if (direction.y === 0) setDirection({ x: 0, y: -1 });
@@ -180,7 +185,7 @@ export default function SnakeGame() {
               height={GRID_SIZE * CELL_SIZE}
               className="border-4 border-gray-600 rounded-lg"
             />
-            
+
             {gameOver && (
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 rounded-lg">
                 <div className="text-center">

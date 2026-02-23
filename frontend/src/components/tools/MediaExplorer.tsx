@@ -56,7 +56,16 @@ export default function MediaExplorer() {
                 params: { api_key: '6e79e3b0d3ae9116b648e3cc97689b48' }
             });
             setTrending(res.data.results || []);
-        } catch { /* silent */ }
+        } catch {
+            // Fallback content if API fails
+            setTrending([
+                { id: 1, title: 'Inception', overview: 'A thief who steals corporate secrets...', poster_path: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&q=80&w=300', backdrop_path: 'https://images.unsplash.com/photo-1440407876336-62333a6f010c?auto=format&fit=crop&q=80&w=1280', vote_average: 8.8, release_date: '2010', media_type: 'movie', genre_ids: [28, 878] },
+                { id: 2, title: 'Stranger Things', overview: 'When a young boy vanishes...', poster_path: 'https://images.unsplash.com/photo-1627404653243-162e245a190f?auto=format&fit=crop&q=80&w=300', backdrop_path: 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=1280', vote_average: 8.6, first_air_date: '2016', media_type: 'tv', genre_ids: [10765, 18] },
+                { id: 3, title: 'The Dark Knight', overview: 'When the menace known as the Joker...', poster_path: 'https://images.unsplash.com/photo-1509281373149-e957c6296406?auto=format&fit=crop&q=80&w=300', backdrop_path: 'https://images.unsplash.com/photo-1478479405421-ce83c92fb3ba?auto=format&fit=crop&q=80&w=1280', vote_average: 9.0, release_date: '2008', media_type: 'movie', genre_ids: [28, 80, 18] },
+                { id: 4, title: 'Breaking Bad', overview: 'A high school chemistry teacher...', poster_path: 'https://images.unsplash.com/photo-1580927752452-89d86da3fa0a?auto=format&fit=crop&q=80&w=300', backdrop_path: 'https://images.unsplash.com/photo-1533518463841-d62e1fc91373?auto=format&fit=crop&q=80&w=1280', vote_average: 9.5, first_air_date: '2008', media_type: 'tv', genre_ids: [18] }
+            ] as unknown as Movie[]);
+            setError('TMDB API connection failed. Showing sample fallback content.');
+        }
     };
 
     React.useEffect(() => { loadTrending(); }, []);
@@ -112,14 +121,14 @@ export default function MediaExplorer() {
                         <div className="mb-6 bg-gray-900 rounded-xl overflow-hidden">
                             {selected.backdrop_path && (
                                 <div className="relative h-48 md:h-64">
-                                    <img src={`${TMDB_IMG}/w1280${selected.backdrop_path}`} alt="" className="w-full h-full object-cover" />
+                                    <img src={selected.backdrop_path.startsWith('http') ? selected.backdrop_path : `${TMDB_IMG}/w1280${selected.backdrop_path}`} alt="" className="w-full h-full object-cover" />
                                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
                                 </div>
                             )}
                             <div className="p-6 -mt-16 relative">
                                 <div className="flex gap-4">
                                     {selected.poster_path && (
-                                        <img src={`${TMDB_IMG}/w300${selected.poster_path}`} alt="" className="w-32 rounded-lg shadow-xl flex-shrink-0" />
+                                        <img src={selected.poster_path.startsWith('http') ? selected.poster_path : `${TMDB_IMG}/w300${selected.poster_path}`} alt="" className="w-32 rounded-lg shadow-xl flex-shrink-0 object-cover" />
                                     )}
                                     <div>
                                         <h3 className="text-2xl font-bold">{getTitle(selected)}</h3>
@@ -147,7 +156,7 @@ export default function MediaExplorer() {
                             <button key={m.id} onClick={() => setSelected(m)}
                                 className="group bg-gray-900 rounded-lg overflow-hidden text-left hover:ring-2 hover:ring-purple-500 transition">
                                 {m.poster_path ? (
-                                    <img src={`${TMDB_IMG}/w300${m.poster_path}`} alt={getTitle(m)} className="w-full aspect-[2/3] object-cover" />
+                                    <img src={m.poster_path.startsWith('http') ? m.poster_path : `${TMDB_IMG}/w300${m.poster_path}`} alt={getTitle(m)} className="w-full aspect-[2/3] object-cover" />
                                 ) : (
                                     <div className="w-full aspect-[2/3] bg-gray-700 flex items-center justify-center text-4xl">🎬</div>
                                 )}

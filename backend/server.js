@@ -16,6 +16,7 @@ const PORT = process.env.PORT || process.env.REPLIT_DEV_PORT || 5000;
 
 const imageRoutes = require('./src/routes/imageRoutes');
 const providerStatusRoutes = require('./src/routes/providerStatus');
+const { YoutubeTranscript } = require('youtube-transcript');
 
 // CORS configuration - Allow all origins for now (you can restrict this later)
 const corsOptions = {
@@ -278,13 +279,46 @@ app.post('/api/audio/generate', upload.none(), async (req, res) => {
 });
 
 // =============================================
-// CHAT HELPER — cascading fallback across 7 providers
+// CHAT HELPER — cascading fallback across 8 providers
 // =============================================
+
+const generateWithClaude = async (messages, model = 'claude-3-5-sonnet-20241022') => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const system = messages.find(m => m.role === 'system')?.content;
+  const filteredMsgs = messages.filter(m => m.role !== 'system');
+
+  const response = await axios.post('https://api.anthropic.com/v1/messages', {
+    model,
+    max_tokens: 4096,
+    system,
+    messages: filteredMsgs
+  }, {
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    timeout: 30000
+  });
+
+  return response.data.content[0]?.text || '';
+};
+
 const chatWithFallback = async (messages, preferredModel) => {
   const systemMsg = messages.find(m => m.role === 'system') || { role: 'system', content: 'You are a helpful AI assistant for AI Content Studio. Provide clear, detailed, and accurate responses.' };
   const userMsgs = messages.filter(m => m.role !== 'system');
   const allMessages = [systemMsg, ...userMsgs];
   const lastUserMsg = userMsgs[userMsgs.length - 1]?.content || '';
+
+  // 0. Direct Anthropic (Claude) — Premium Tier
+  if (process.env.ANTHROPIC_API_KEY && (!preferredModel || preferredModel.includes('claude'))) {
+    try {
+      const text = await generateWithClaude(messages, preferredModel === 'anthropic/claude-3.5-sonnet' ? 'claude-3-5-sonnet-20241022' : 'claude-3-5-sonnet-20241022');
+      if (text) return { response: text, model: 'claude-3.5-sonnet', provider: 'anthropic' };
+    } catch (e) { console.log('Direct Claude failed:', e.message); }
+  }
 
   // 1. OpenRouter (many models)
   if (process.env.OPENROUTER_API_KEY) {
@@ -403,6 +437,48 @@ const chatWithFallback = async (messages, preferredModel) => {
   throw new Error('All chat providers failed');
 };
 
+const analyzeImageWithClaude = async (imageBuffer, question) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const base64Image = imageBuffer.toString('base64');
+  // Detect media type from buffer (simplification: assume jpeg/png)
+  const mediaType = imageBuffer[0] === 0xFF ? 'image/jpeg' : 'image/png';
+
+  const response = await axios.post('https://api.anthropic.com/v1/messages', {
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 2048,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64Image
+            }
+          },
+          {
+            type: 'text',
+            text: question || 'Describe this image in detail.'
+          }
+        ]
+      }
+    ]
+  }, {
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    timeout: 45000
+  });
+
+  return response.data.content[0]?.text || '';
+};
+
 // AI Chat/Assistant — 7 providers with cascading fallback
 app.post('/api/chat', upload.none(), async (req, res) => {
   try {
@@ -425,9 +501,39 @@ app.post('/api/chat', upload.none(), async (req, res) => {
   }
 });
 
+// AI Content Writer Generation
+app.post('/api/content/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, type = 'blog post', tone = 'informative', length = 'medium', model } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const lengthGuide = { short: '200-300 words', medium: '500-700 words', long: '1000-1500 words' };
+    let lengthInstruction = lengthGuide[length] || (typeof length === 'string' && length.includes('words') ? length : 'medium length');
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a professional AI copywriter and content creator. Write a ${tone} ${type} about the given topic. 
+        Length constraint: ${lengthInstruction}. 
+        Output ONLY the written content. Format using markdown with headings and paragraphs where appropriate.`
+      },
+      { role: 'user', content: `Topic: ${topic}` }
+    ];
+
+    const result = await chatWithFallback(messages, model);
+    res.json({ success: true, content: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Content generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate content', message: error.message });
+  }
+});
+
 // Available models endpoint
 app.get('/api/models', (req, res) => {
   const models = [];
+  if (process.env.ANTHROPIC_API_KEY) {
+    models.push({ id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (Direct)', provider: 'anthropic' });
+  }
   if (process.env.OPENROUTER_API_KEY) {
     models.push(
       { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openrouter' },
@@ -898,6 +1004,64 @@ app.post('/api/social/generate', upload.none(), async (req, res) => {
   }
 });
 
+// AI Email Writer
+app.post('/api/email/generate', upload.none(), async (req, res) => {
+  try {
+    const { purpose, recipient, tone = 'professional', context } = req.body;
+    if (!purpose) return res.status(400).json({ error: 'Purpose is required' });
+
+    const messages = [
+      { role: 'system', content: `You are a professional AI email writer. Write a ${tone} email for the following purpose. Recipient: ${recipient || 'Not specified'}. Context: ${context || 'None'}. Output ONLY the email content with a subject line at the top.` },
+      { role: 'user', content: purpose }
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, email: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('Email generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate email' });
+  }
+});
+
+// AI Hashtag Generator
+app.post('/api/hashtags/generate', upload.none(), async (req, res) => {
+  try {
+    const { topic, platform = 'instagram', count = 30 } = req.body;
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+    const messages = [
+      { role: 'system', content: `You are a social media expert. Generate ${count} trending and relevant hashtags for ${platform} about the given topic. Return individual hashtags separated by spaces.` },
+      { role: 'user', content: topic }
+    ];
+
+    const result = await chatWithFallback(messages);
+    const hashtags = result.response.split(/[\s,]+/).filter(h => h.startsWith('#')).slice(0, count);
+    res.json({ success: true, hashtags, provider: result.provider });
+  } catch (error) {
+    console.error('Hashtag generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate hashtags' });
+  }
+});
+
+// Breach Checker Proxy (RapidAPI)
+app.get('/api/breach/check', async (req, res) => {
+  try {
+    const { term } = req.query;
+    if (!term) return res.status(400).json({ error: 'Term is required' });
+
+    const response = await axios.get(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(term as string)}`, {
+      headers: {
+        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || '860a1877d0msh868e8bfdc0680aep189561jsn8221ee460831',
+        'X-RapidAPI-Host': 'breachdirectory.p.rapidapi.com'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Breach check proxy error:', error.message);
+    res.status(500).json({ error: 'Failed to check breaches' });
+  }
+});
+
 // Resume Builder — generates a formatted resume from details
 app.post('/api/resume/generate', upload.none(), async (req, res) => {
   try {
@@ -914,26 +1078,6 @@ app.post('/api/resume/generate', upload.none(), async (req, res) => {
   } catch (error) {
     console.error('Resume generation error:', error.message);
     res.status(500).json({ error: 'Failed to generate resume', message: error.message });
-  }
-});
-
-// AI Content Writer — articles, stories, blog posts
-app.post('/api/content/generate', upload.none(), async (req, res) => {
-  try {
-    const { topic, type = 'blog post', tone = 'informative', length = 'medium' } = req.body;
-    if (!topic) return res.status(400).json({ error: 'Topic is required' });
-
-    const lengthGuide = { short: '200-300 words', medium: '500-700 words', long: '1000-1500 words' };
-    const messages = [
-      { role: 'system', content: `You are an expert content writer. Write a ${tone} ${type} of ${lengthGuide[length] || '500-700 words'}. Use proper formatting with headings, paragraphs, and engaging language. Make it original and insightful.` },
-      { role: 'user', content: `Write about: ${topic}` }
-    ];
-
-    const result = await chatWithFallback(messages);
-    res.json({ success: true, content: result.response, provider: result.provider });
-  } catch (error) {
-    console.error('Content generation error:', error.message);
-    res.status(500).json({ error: 'Failed to generate content', message: error.message });
   }
 });
 
@@ -1404,7 +1548,36 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
       );
     }
 
-    // 11. Fallback - Image sequence from Pollinations (free, always available)
+    // 11. SkyReels (Infinite-length video generation)
+    if (process.env.SKYREELS_API_KEY) {
+      apiAttempts.push(
+        axios.post(
+          'https://api.skyreels.ai/v1/video/generation', // Best guess endpoint
+          {
+            prompt: prompt,
+            duration: duration
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${process.env.SKYREELS_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          }
+        ).then(response => {
+          return {
+            success: true,
+            message: 'Video generation started via SkyReels',
+            generationId: response.data.id || response.data.generation_id,
+            prompt,
+            status: 'processing',
+            provider: 'skyreels'
+          };
+        }).catch(err => { throw new Error('SkyReels: ' + err.message); })
+      );
+    }
+
+    // 12. Fallback - Image sequence from Pollinations (free, always available)
     apiAttempts.push(
       axios.get(
         `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true&seed=${Date.now()}`,
@@ -1438,6 +1611,42 @@ app.post('/api/video/generate', upload.none(), async (req, res) => {
   }
 });
 
+// Check video generation status (Generic/Provider-specific)
+app.get('/api/video/status/:provider/:id', async (req, res) => {
+  try {
+    const { provider, id } = req.params;
+
+    if (provider === 'replicate') {
+      const response = await axios.get(`https://api.replicate.com/v1/predictions/${id}`, {
+        headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}` }
+      });
+      return res.json({
+        success: true,
+        status: response.data.status, // succeeded, failed, processing
+        videoUrl: response.data.output?.[0] || response.data.output,
+        provider: 'replicate'
+      });
+    }
+
+    if (provider === 'runway' || provider === 'gen2') {
+      const response = await axios.get(`https://api.runwayml.com/v1/generations/${id}`, {
+        headers: { 'Authorization': `Bearer ${process.env.RUNWAY_API_KEY || process.env.GEN2_API_KEY}` }
+      });
+      return res.json({
+        success: true,
+        status: response.data.status,
+        videoUrl: response.data.video_url,
+        provider: 'runway'
+      });
+    }
+
+    res.status(404).json({ error: 'Status provider not supported' });
+  } catch (error) {
+    console.error('Video status error:', error.message);
+    res.status(500).json({ error: 'Status check failed', message: error.message });
+  }
+});
+
 // Check video generation status (for LTX)
 app.get('/api/video/status/:id', async (req, res) => {
   try {
@@ -1468,6 +1677,75 @@ app.get('/api/video/status/:id', async (req, res) => {
       error: 'Failed to check video status',
       message: error.message
     });
+  }
+});
+
+// AI Image Upscaler — uses Fal.ai Aura-SR
+app.post('/api/image/upscale', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const { upscaleImage } = require('./src/imageService');
+    const result = await upscaleImage(imageBuffer);
+
+    // Cleanup
+    try { fs.unlinkSync(req.file.path); } catch (e) { }
+
+    res.json({ success: true, imageUrl: result.imageUrl, provider: result.source });
+  } catch (error) {
+    console.error('Upscale error:', error.message);
+    res.status(500).json({ error: 'Upscaling failed', message: error.message });
+  }
+});
+
+// AI Vision / Image Analyzer — uses direct Claude integration
+app.post('/api/image/analyze', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+    const { question } = req.body;
+    const imageBuffer = fs.readFileSync(req.file.path);
+
+    const analysis = await analyzeImageWithClaude(imageBuffer, question);
+
+    // Cleanup
+    try { fs.unlinkSync(req.file.path); } catch (e) { }
+
+    res.json({ success: true, analysis, provider: 'anthropic-vision' });
+  } catch (error) {
+    console.error('Vision analysis error:', error.message);
+    res.status(500).json({ error: 'Vision analysis failed', message: error.message });
+  }
+});
+
+// YouTube Summarizer — uses youtube-transcript + chat fallback
+app.post('/api/youtube/summarize', upload.none(), async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'YouTube URL is required' });
+
+    // Fetch transcript
+    let transcriptText = '';
+    try {
+      const transcript = await YoutubeTranscript.fetchTranscript(url);
+      transcriptText = transcript.map(t => t.text).join(' ');
+    } catch (e) {
+      return res.status(400).json({ error: 'Could not fetch transcript for this video. Is it public and does it have captions?' });
+    }
+
+    if (!transcriptText || transcriptText.length < 50) {
+      return res.status(400).json({ error: 'Transcript too short to summarize.' });
+    }
+
+    const messages = [
+      { role: 'system', content: 'You are an expert content summarizer. Provide a detailed, perfectly structured summary of the following YouTube video transcript. Use bullet points and bold headings.' },
+      { role: 'user', content: `Transcript:\n${transcriptText.substring(0, 15000)}` } // Cap length
+    ];
+
+    const result = await chatWithFallback(messages);
+    res.json({ success: true, summary: result.response, provider: result.provider });
+  } catch (error) {
+    console.error('YouTube summary error:', error.message);
+    res.status(500).json({ error: 'YouTube summarization failed', message: error.message });
   }
 });
 

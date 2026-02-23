@@ -26,12 +26,12 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-gray-900 overflow-hidden">
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50 
         transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
@@ -43,10 +43,10 @@ export default function Home() {
           setSidebarOpen(false);
         }} />
       </div>
-      
+
       <div className="flex-1 flex flex-col h-full overflow-y-auto">
         <div className="lg:hidden flex items-center justify-between p-4 bg-gray-950 border-b border-gray-800">
-          <button 
+          <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 bg-gray-800 rounded-lg text-white"
           >
@@ -68,9 +68,13 @@ export default function Home() {
             <span className="font-semibold text-green-500">● Running</span>
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-auto">
-          <Dashboard section={currentSection} backendStatus={backendStatus} />
+          <Dashboard
+            section={currentSection}
+            backendStatus={backendStatus}
+            onSectionChange={(section) => setCurrentSection(section)}
+          />
         </div>
       </div>
     </div>

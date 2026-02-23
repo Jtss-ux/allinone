@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { backendApi } from '@/config/api';
+import { jsPDF } from "jspdf";
 
 // =============================================
 // PPT TEMPLATES — including Whiteboard Master
@@ -57,6 +58,9 @@ interface Slide {
     content: string[];
     notes: string;
     layout: string;
+    imageUrl?: string;
+    isGeneratingImage?: boolean;
+    imageError?: string;
 }
 
 export default function PPTGenerator() {
@@ -71,6 +75,50 @@ export default function PPTGenerator() {
     const [customInstructions, setCustomInstructions] = useState('');
 
     const template = PPT_TEMPLATES.find(t => t.id === selectedTemplate) || PPT_TEMPLATES[0];
+
+    const generateImageForSlide = async (index: number) => {
+        const slide = slides[index];
+        if (!slide || slide.imageUrl || slide.isGeneratingImage) return;
+
+        setSlides(prev => {
+            const next = [...prev];
+            next[index] = { ...next[index], isGeneratingImage: true, imageError: undefined };
+            return next;
+        });
+
+        try {
+            const prompt = getImagePrompt(slide);
+            const response = await axios.post(backendApi('/api/image/generate'), {
+                prompt,
+                width: 1024,
+                height: 576, // 16:9 aspect ratio
+                num_inference_steps: 20,
+                provider: 'midjourney'
+            });
+
+            if (response.data.success && response.data.imageUrl) {
+                setSlides(prev => {
+                    const next = [...prev];
+                    next[index] = { ...next[index], imageUrl: response.data.imageUrl, isGeneratingImage: false };
+                    return next;
+                });
+            } else {
+                throw new Error('Failed to generate image');
+            }
+        } catch (err: any) {
+            setSlides(prev => {
+                const next = [...prev];
+                next[index] = { ...next[index], imageError: err.message || 'Image generation failed', isGeneratingImage: false };
+                return next;
+            });
+        }
+    };
+
+    React.useEffect(() => {
+        if (slides.length > 0) {
+            generateImageForSlide(currentSlide);
+        }
+    }, [currentSlide, slides.length]);
 
     const handleGenerate = async () => {
         if (!topic.trim()) {
@@ -154,6 +202,89 @@ export default function PPTGenerator() {
         URL.revokeObjectURL(url);
     };
 
+    const exportAsPDF = () => {
+        const t = template;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'in', format: [10, 5.625] });
+
+        slides.forEach((slide, i) => {
+            if (i > 0) doc.addPage();
+            // Background
+            doc.setFillColor(t.colors.bg);
+            doc.rect(0, 0, 10, 5.625, 'F');
+
+            // Title
+            doc.setTextColor(t.colors.accent);
+            doc.setFontSize(28);
+            doc.text(slide.title, 0.8, 1);
+
+            // Line
+            doc.setDrawColor(t.colors.accent);
+            doc.setLineWidth(0.05);
+            doc.line(0.8, 1.2, 9.2, 1.2);
+
+            // Content
+            doc.setTextColor(t.colors.text);
+            doc.setFontSize(16);
+            let y = 1.8;
+            slide.content.forEach(point => {
+                doc.text(`> ${point}`, 0.8, y);
+                y += 0.4;
+            });
+
+            // Page Number
+            doc.setFontSize(10);
+            doc.text(`${i + 1} / ${slides.length}`, 9, 5.2);
+        });
+
+        doc.save(`${topic.replace(/[^a-z0-9]/gi, '_')}_presentation.pdf`);
+    };
+
+    const exportAsPPTX = async () => {
+        const t = template;
+        // Load pptxgenjs from CDN to bypass Next.js Webpack node:fs issues
+        if (!(window as any).PptxGenJS) {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+            });
+        }
+        const pptxgen = (window as any).PptxGenJS;
+        let pptx = new pptxgen();
+        pptx.layout = 'LAYOUT_16x9';
+
+        slides.forEach((slide, i) => {
+            let pptSlide = pptx.addSlide();
+            pptSlide.background = { color: t.colors.bg.replace('#', '') };
+
+            pptSlide.addText(slide.title, {
+                x: 0.5, y: 0.5, w: 9, h: 1,
+                fontSize: 32, color: t.colors.accent.replace('#', ''), bold: true
+            });
+
+            let shapeFormat = { x: 0.5, y: 1.4, w: 9, h: 0.05, fill: { color: t.colors.accent.replace('#', '') } };
+            pptSlide.addShape(pptx.ShapeType.rect, shapeFormat);
+
+            let contentText = slide.content.map(point => ({ text: point, options: { bullet: true } }));
+            pptSlide.addText(contentText as any, {
+                x: 0.5, y: 1.8, w: 9, h: 3,
+                fontSize: 18, color: t.colors.text.replace('#', ''), align: 'left', valign: 'top'
+            });
+
+            pptSlide.addText(`${i + 1} / ${slides.length}`, {
+                x: 8.5, y: 5.0, w: 1, h: 0.5, fontSize: 12, color: t.colors.text.replace('#', ''), align: 'right'
+            });
+
+            if (slide.notes) {
+                pptSlide.addNotes(slide.notes);
+            }
+        });
+
+        pptx.writeFile({ fileName: `${topic.replace(/[^a-z0-9]/gi, '_')}_presentation.pptx` });
+    };
+
     const getImagePrompt = (slide: Slide) => {
         return `${template.promptPrefix}\nContent: Title: "${slide.title}". Layout: ${slide.layout || 'centered'}. Points: ${slide.content.join('; ')}`;
     };
@@ -198,8 +329,8 @@ export default function PPTGenerator() {
                                     key={t.id}
                                     onClick={() => setSelectedTemplate(t.id)}
                                     className={`p-3 rounded-lg border-2 text-left transition ${selectedTemplate === t.id
-                                            ? 'border-orange-500 bg-orange-500/10'
-                                            : 'border-gray-600 hover:border-gray-500 bg-gray-700'
+                                        ? 'border-orange-500 bg-orange-500/10'
+                                        : 'border-gray-600 hover:border-gray-500 bg-gray-700'
                                         }`}
                                 >
                                     <div className="font-semibold text-sm">{t.name}</div>
@@ -261,11 +392,17 @@ export default function PPTGenerator() {
                                     {provider && (
                                         <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-400">via {provider}</span>
                                     )}
-                                    <button onClick={exportAsText} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm transition">
-                                        ⬇️ Download .md
+                                    <button onClick={exportAsText} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm transition font-medium">
+                                        ⬇️ .MD
                                     </button>
-                                    <button onClick={exportAsHTML} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm transition">
-                                        ⬇️ Download .html
+                                    <button onClick={exportAsHTML} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm transition font-medium">
+                                        ⬇️ .HTML
+                                    </button>
+                                    <button onClick={exportAsPDF} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm transition font-medium">
+                                        ⬇️ .PDF
+                                    </button>
+                                    <button onClick={exportAsPPTX} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 rounded text-sm transition font-medium">
+                                        ⬇️ .PPTX
                                     </button>
                                 </div>
                             </div>
@@ -287,48 +424,48 @@ export default function PPTGenerator() {
                             {/* Current slide preview */}
                             {slides[currentSlide] && (
                                 <div
-                                    className="rounded-xl overflow-hidden border-2 border-gray-600"
-                                    style={{ background: template.colors.bg, color: template.colors.text }}
+                                    className="rounded-xl overflow-hidden border-2 border-gray-600 relative bg-gray-900 min-h-[400px] md:min-h-[500px]"
                                 >
-                                    <div className="aspect-[16/9] p-8 md:p-12 flex flex-col justify-center relative">
-                                        <h2
-                                            className="text-2xl md:text-3xl font-bold mb-6"
-                                            style={{ color: template.colors.accent, borderBottom: `3px solid ${template.colors.accent}`, paddingBottom: '12px' }}
-                                        >
-                                            {slides[currentSlide].title}
-                                        </h2>
-                                        <ul className="space-y-3 text-base md:text-lg">
-                                            {slides[currentSlide].content.map((point, pi) => (
-                                                <li key={pi} className="flex items-start gap-3">
-                                                    <span style={{ color: template.colors.accent }} className="font-bold mt-0.5">▸</span>
-                                                    <span>{point}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <div className="absolute bottom-4 right-6 text-sm opacity-40">
-                                            {currentSlide + 1} / {slides.length}
-                                        </div>
-                                    </div>
-
-                                    {/* Notes + Image Prompt */}
-                                    <div className="bg-gray-900 p-4 border-t border-gray-700 space-y-3">
-                                        {slides[currentSlide].notes && (
-                                            <div>
-                                                <span className="text-xs font-semibold text-gray-400">Speaker Notes:</span>
-                                                <p className="text-sm text-gray-300 mt-1">{slides[currentSlide].notes}</p>
+                                    {/* Auto-generated Image Display Only */}
+                                    <div className="w-full h-full relative flex items-center justify-center p-2 bg-black/40">
+                                        {slides[currentSlide].imageUrl ? (
+                                            <img
+                                                src={slides[currentSlide].imageUrl}
+                                                alt={slides[currentSlide].title}
+                                                className="w-full h-auto object-contain max-h-[70vh] rounded drop-shadow-2xl"
+                                            />
+                                        ) : slides[currentSlide].isGeneratingImage ? (
+                                            <div className="flex flex-col items-center justify-center text-gray-400 space-y-4 py-32">
+                                                <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                                                <div className="text-sm font-medium animate-pulse">🖌️ AI is drawing the perfect scene...</div>
+                                                <div className="text-xs opacity-60 text-center max-w-[80%]">Generating picture for: {slides[currentSlide].title}</div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center text-gray-500 py-32">
+                                                <div className="text-4xl mb-4">🖼️</div>
+                                                {slides[currentSlide].imageError ? (
+                                                    <div className="text-center text-red-400 text-sm px-4">
+                                                        <div className="font-bold mb-1">Generation failed</div>
+                                                        <div className="text-xs opacity-70 mb-4">{slides[currentSlide].imageError}</div>
+                                                        <button
+                                                            onClick={() => generateImageForSlide(currentSlide)}
+                                                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded mt-2 text-sm transition border border-gray-600 text-white"
+                                                        >
+                                                            Try Again
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => generateImageForSlide(currentSlide)}
+                                                        className="px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition"
+                                                    >
+                                                        Generate Slide Image
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
-                                        <div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-semibold text-gray-400">🎨 Image Gen Prompt (for Midjourney/DALL-E):</span>
-                                                <button
-                                                    onClick={() => copyPrompt(slides[currentSlide])}
-                                                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition"
-                                                >
-                                                    📋 Copy Prompt
-                                                </button>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-1 break-words">{getImagePrompt(slides[currentSlide]).substring(0, 200)}...</p>
+                                        <div className="absolute bottom-4 right-6 text-sm text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm z-10">
+                                            {currentSlide + 1} / {slides.length}
                                         </div>
                                     </div>
                                 </div>

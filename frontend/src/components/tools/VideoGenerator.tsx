@@ -10,6 +10,38 @@ export default function VideoGenerator() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
 
+  const pollStatus = async (jobId: string, provider: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const url = provider === 'ltx'
+          ? `/api/video/status/${jobId}`
+          : `/api/video/status/${provider}/${jobId}`;
+
+        const response = await axios.get(backendApi(url));
+        if (response.data.status === 'succeeded' || response.data.status === 'completed') {
+          setResult({ ...response.data, success: true });
+          setLoading(false);
+          clearInterval(interval);
+        } else if (response.data.status === 'failed') {
+          setError('Video generation failed at the provider.');
+          setLoading(false);
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    // Stop polling after 10 minutes (safety)
+    setTimeout(() => {
+      clearInterval(interval);
+      if (loading) {
+        setLoading(false);
+        setError('Generation timed out. Please check back later.');
+      }
+    }, 600000);
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('Please enter a prompt');
@@ -24,10 +56,16 @@ export default function VideoGenerator() {
       const response = await axios.post(backendApi('/api/video/generate'), {
         prompt,
       });
-      setResult(response.data);
+
+      if (response.data.status === 'processing' && response.data.generationId) {
+        setResult(response.data);
+        pollStatus(response.data.generationId, response.data.provider);
+      } else {
+        setResult(response.data);
+        setLoading(false);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to generate video');
-    } finally {
       setLoading(false);
     }
   };
@@ -69,23 +107,35 @@ export default function VideoGenerator() {
         {result && (
           <div className="mt-6 p-4 bg-gray-700 rounded-lg">
             <h4 className="font-semibold mb-2">Video Generation Status</h4>
-            <p className="text-sm text-gray-300">
-              <strong>Job ID:</strong> {result.jobId || result.prompt}
-            </p>
-            <p className="text-sm text-gray-300">
-              <strong>Status:</strong> {result.message}
-            </p>
-            {result.provider && (
-              <p className="text-sm text-gray-300 mt-1">
-                <strong>Model:</strong>{' '}
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-900/50 text-purple-300 border border-purple-700/50">
-                  🤖 {result.provider}
-                </span>
-              </p>
+            
+            {result.videoUrl ? (
+              <div className="mt-4">
+                <video src={result.videoUrl} controls className="w-full rounded-lg border border-gray-600 shadow-xl" />
+                <a 
+                  href={result.videoUrl} 
+                  download 
+                  className="mt-4 inline-block w-full text-center py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold transition"
+                >
+                  ⬇️ Download Video
+                </a>
+              </div>
+            ) : result.imageUrl ? (
+              <div className="mt-4">
+                <p className="text-xs text-yellow-400 mb-2 font-mono">Status: {result.note || 'Processing first frame...'}</p>
+                <img src={result.imageUrl} alt="First Frame" className="w-full rounded-lg border border-gray-600" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-6">
+                <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-sm text-gray-300 font-medium">Generating your video via {result.provider}...</p>
+                <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-widest">Do not close this tab</p>
+              </div>
             )}
-            <p className="text-sm text-gray-300">
-              <strong>Estimated Time:</strong> {result.estimatedTime || 'Depends on provider'}
-            </p>
+
+            <div className="mt-4 pt-4 border-t border-gray-600 text-xs text-gray-400">
+              <p><strong>Job:</strong> {result.generationId || 'Local-Process'}</p>
+              <p><strong>Provider:</strong> {result.provider}</p>
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { TextToImage } = require('deepinfra');
 
 // =============================================
 // IMAGE SERVICE — 2-Tier Parallel Racing Architecture
@@ -109,36 +110,35 @@ const generateWithFal = async (prompt, opts = {}) => {
   return { imageBuffer: Buffer.from(imgRes.data), source: 'fal' };
 };
 
-// --- DeepInfra (FLUX klein) ---
+// --- DeepInfra ---
 const generateWithDeepInfra = async (prompt, opts = {}) => {
   const key = process.env.DEEPINFRA_API_KEY;
   if (!key) throw new Error('DEEPINFRA_API_KEY not configured');
 
-  const response = await axiosClient.post(
-    'https://api.deepinfra.com/v1/openai/images/generations',
-    {
-      prompt,
-      model: 'black-forest-labs/FLUX-2-klein-4b',
-      size: '1024x1024',
-      n: 1,
-      response_format: 'b64_json',
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      responseType: 'json',
-      timeout: 45000,
-      validateStatus: (s) => s < 500,
-    }
-  );
+  const modelName = opts.model || 'Bria/fibo_edit';
+  const model = new TextToImage(modelName, key);
 
-  if (response.status !== 200 || !response.data?.data?.[0]?.b64_json) {
-    throw new Error(`DeepInfra ${response.status}`);
+  const response = await model.generate({ prompt });
+
+  if (!response || !response.images || response.images.length === 0) {
+    throw new Error('DeepInfra: no image returned');
   }
+
+  let imgUrl = response.images[0];
+
+  // Some models return base64
+  if (imgUrl.startsWith('data:image/')) {
+    const base64Data = imgUrl.replace(/^data:image\/\w+;base64,/, '');
+    return {
+      imageBuffer: Buffer.from(base64Data, 'base64'),
+      source: 'deepinfra',
+    };
+  }
+
+  // Otherwise, it's a URL to fetch
+  const imgRes = await axiosClient.get(imgUrl, { responseType: 'arraybuffer', timeout: 30000 });
   return {
-    imageBuffer: Buffer.from(response.data.data[0].b64_json, 'base64'),
+    imageBuffer: Buffer.from(imgRes.data),
     source: 'deepinfra',
   };
 };
@@ -343,12 +343,65 @@ const generateWithPollinations = async ({ encodedPrompt, width, height, seed }) 
 // =============================================
 // MAIN: 2-Tier Parallel Racing Architecture
 // =============================================
+
+// --- Midjourney (unofficial Discord API) ---
+const generateWithMidjourney = async (prompt) => {
+  const { Midjourney } = require('midjourney');
+  const serverId = process.env.SERVER_ID;
+  const channelId = process.env.CHANNEL_ID;
+  const salaiToken = process.env.SALAI_TOKEN;
+
+  if (!serverId || !channelId || !salaiToken) {
+    throw new Error('Midjourney environment variables not configured (SERVER_ID, CHANNEL_ID, SALAI_TOKEN)');
+  }
+
+  const client = new Midjourney({
+    ServerId: serverId,
+    ChannelId: channelId,
+    SalaiToken: salaiToken,
+    Debug: false,
+    Ws: true,
+  });
+
+  await client.init();
+  const Imagine = await client.Imagine(prompt, (uri, progress) => {
+    // Optional logging of progress
+  });
+
+  if (!Imagine || !Imagine.uri) {
+    throw new Error('Midjourney generation failed: No image URI returned');
+  }
+
+  const imgRes = await axiosClient.get(Imagine.uri, { responseType: 'arraybuffer', timeout: 30000 });
+  return { imageBuffer: Buffer.from(imgRes.data), source: 'midjourney' };
+};
+
 const generateImage = async (prompt, opts = {}) => {
   const start = Date.now();
   const encodedPrompt = encodeURIComponent(prompt);
   const width = opts.width || 1024;
   const height = opts.height || 1024;
   const seed = opts.seed || Math.floor(Math.random() * 1000000);
+
+  // --- EXPLICIT PROVIDER OVERRIDE ---
+  if (opts.provider === 'midjourney' || process.env.SALAI_TOKEN) {
+    try {
+      console.log(`[image] Attempting explicit provider: midjourney`);
+      const result = await generateWithMidjourney(prompt);
+      const latency = Date.now() - start;
+      console.log(`[image] EXPLICIT tier succeeded via midjourney (${latency}ms)`);
+      return {
+        imageUrl: `data:image/png;base64,${result.imageBuffer.toString('base64')}`,
+        provider: 'midjourney',
+        tier: 'premium',
+        latency,
+        prompt,
+      };
+    } catch (e) {
+      console.warn(`[image] Midjourney explicit attempt failed, falling back...`, e.message);
+      if (opts.provider === 'midjourney') throw e; // strict override fails immediately
+    }
+  }
 
   // --- TIER 1: Fast providers — race them all simultaneously ---
   const fastProviders = [
@@ -509,16 +562,16 @@ const img2imgWithReplicate = async (imageDataUrl, prompt, opts = {}) => {
   const strength = opts.strength ?? 0.75;
   const authHeader = { Authorization: `Token ${token}`, 'Content-Type': 'application/json' };
 
-  // Use the newer model API format
+  // Use a modern SDXL model for better img2img results
   const createRes = await axiosClient.post(
     'https://api.replicate.com/v1/predictions',
     {
-      version: '15a3689ee13b0d2616e98820eca31d4c3abcd36672df6afce5cb6feb1d66087d',
+      version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7afd8222459c37c843bda729fd0c',
       input: {
         image: imageDataUrl,
-        prompt,
+        prompt: prompt,
         prompt_strength: strength,
-        num_inference_steps: 25,
+        num_inference_steps: 30,
         guidance_scale: 7.5,
       },
     },
@@ -603,7 +656,9 @@ const img2imgFallbackGenerate = async (prompt, opts = {}) => {
 // --- MAIN: img2img with cascading fallback ---
 const generateImageToImage = async (imageBuffer, prompt, opts = {}) => {
   const base64 = imageBuffer.toString('base64');
-  const imageDataUrl = `data:image/png;base64,${base64}`;
+  // Detect media type
+  const mediaType = imageBuffer[0] === 0xFF ? 'image/jpeg' : 'image/png';
+  const imageDataUrl = `data:${mediaType};base64,${base64}`;
   const start = Date.now();
 
   const providers = [
@@ -629,8 +684,9 @@ const generateImageToImage = async (imageBuffer, prompt, opts = {}) => {
       result.success = true;
       return result;
     } catch (e) {
-      console.warn(`[img2img] ${p.name} failed:`, e.message);
-      errors.push(`${p.name}: ${e.message}`);
+      const errorMsg = e.response?.data?.error || e.message;
+      console.warn(`[img2img] ${p.name} failed:`, errorMsg);
+      errors.push(`${p.name}: ${errorMsg}`);
     }
   }
 
@@ -648,8 +704,92 @@ const generateImageToImage = async (imageBuffer, prompt, opts = {}) => {
   }
 
   throw new Error(
-    `Image transformation failed (tried ${errors.length} providers). Details: ${errors.join('; ')}`
+    `Image transformation failed across all providers. Check your API keys (FAL_KEY, REPLICATE_API_TOKEN, HUGGING_FACE_API_KEY).`
   );
 };
 
-module.exports = { generateImage, generateImageToImage };
+// --- Fal.ai Upscaler (Aura-SR) ---
+const upscaleWithFal = async (imageDataUrl) => {
+  const key = process.env.FAL_KEY || process.env.FAL_API_KEY;
+  if (!key) throw new Error('FAL_KEY not configured');
+
+  const response = await axiosClient.post(
+    'https://queue.fal.run/fal-ai/aura-sr',
+    { image_url: imageDataUrl },
+    {
+      headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
+      timeout: 60000,
+    }
+  );
+
+  const requestId = response.data?.request_id;
+  if (!requestId) throw new Error('Fal.ai Upscale: no request_id');
+
+  for (let i = 0; i < 30; i++) {
+    await wait(2000);
+    const statusRes = await axiosClient.get(
+      `https://queue.fal.run/fal-ai/aura-sr/requests/${requestId}/status`,
+      { headers: { Authorization: `Key ${key}` } }
+    );
+    if (statusRes.data?.status === 'COMPLETED') {
+      const resultRes = await axiosClient.get(
+        `https://queue.fal.run/fal-ai/aura-sr/requests/${requestId}`,
+        { headers: { Authorization: `Key ${key}` } }
+      );
+      const imgUrl = resultRes.data?.image?.url;
+      if (imgUrl) {
+        const imgRes = await axiosClient.get(imgUrl, { responseType: 'arraybuffer' });
+        return {
+          imageUrl: `data:image/png;base64,${Buffer.from(imgRes.data).toString('base64')}`,
+          source: 'fal-aura-sr',
+        };
+      }
+    }
+    if (statusRes.data?.status === 'FAILED') throw new Error('Fal Upscale failed');
+  }
+  throw new Error('Fal Upscale timeout');
+};
+
+const analyzeImageWithClaude = async (imageBuffer, question = 'What is in this image?') => {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY not configured');
+
+  const anthropic = new Anthropic({ apiKey: key });
+  const base64Image = imageBuffer.toString('base64');
+  const mediaType = imageBuffer[0] === 0xFF ? 'image/jpeg' : 'image/png';
+
+  const response = await anthropic.messages.create({
+    model: 'claude-3-5-sonnet-20240620',
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64Image,
+            },
+          },
+          {
+            type: 'text',
+            text: question,
+          },
+        ],
+      },
+    ],
+  });
+
+  return response.content[0].text;
+};
+
+const upscaleImage = async (imageBuffer) => {
+  const base64 = imageBuffer.toString('base64');
+  const imageDataUrl = `data:image/png;base64,${base64}`;
+  return await upscaleWithFal(imageDataUrl);
+};
+
+module.exports = { generateImage, generateImageToImage, upscaleImage, analyzeImageWithClaude };

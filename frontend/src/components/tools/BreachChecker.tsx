@@ -62,11 +62,9 @@ export default function BreachChecker() {
             console.log('XposedOrNot failed, trying alternative...');
         }
 
-        // Try breach directory API
+        // Try breach directory API via backend proxy
         try {
-            const res = await fetch(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(input)}`, {
-                headers: { 'X-RapidAPI-Key': '860a1877d0msh868e8bfdc0680aep189561jsn8221ee460831', 'X-RapidAPI-Host': 'breachdirectory.p.rapidapi.com' }
-            });
+            const res = await fetch(backendApi(`/api/breach/check?term=${encodeURIComponent(input)}`));
             if (res.ok) {
                 const data = await res.json();
                 if (data.result && data.result.length > 0) {

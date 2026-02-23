@@ -32,6 +32,7 @@ const capabilities: JarvisCapability[] = [
   { id: 'writing', name: 'Writing Assistant', icon: '✍️', description: 'Help with writing and editing' },
   { id: 'translation', name: 'Translator', icon: '🌐', description: 'Translate between languages' },
   { id: 'math', name: 'Math Solver', icon: '🔢', description: 'Solve mathematical problems' },
+  { id: 'trends', name: 'AI Trends', icon: '📈', description: 'Analyze latest AI trends utilizing web search' },
 ];
 
 export default function JarvisAI() {
@@ -140,6 +141,16 @@ export default function JarvisAI() {
           aiResponse = `**Translation (${response.data.provider}):**\n\n${response.data.translatedText}`;
         } else {
           aiResponse = "Translation failed. Please try again.";
+        }
+      } else if (activeMode === 'trends') {
+        // Use agent endpoint for trends
+        const response = await axios.post(backendApi('/api/agent'), {
+          prompt: `Analyze the latest AI trends. Reference theunwindai.com if possible. User ask: ${userInput}`
+        });
+        if (response.data.success) {
+          aiResponse = `**AI Trends Analysis (${response.data.provider}):**\n\n${response.data.response}`;
+        } else {
+          aiResponse = "Trends analysis failed. Please try again or check LangChain API keys.";
         }
       } else {
         // General chat — use the real backend with selected model

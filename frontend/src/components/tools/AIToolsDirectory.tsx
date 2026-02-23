@@ -15,6 +15,11 @@ interface AITool {
 }
 
 const AI_TOOLS: AITool[] = [
+    // --- GHelper Premium Tools ---
+    { id: 101, name: '4K Image Upscaler', category: 'Image Editing', link: '#image-upscaler', description: 'Enhance low-res images to ultra-high 4K resolution using Aura-SR neural engine.', icon: '📈', free: true, hasApi: true, tags: ['Internal', 'Premium', 'Upscale'] },
+    { id: 102, name: 'AI Vision Analyzer', category: 'Image Editing', link: '#image-analyzer', description: 'Upload images and ask Claude 3.5 complex questions or get detailed descriptions.', icon: '👁️', free: true, hasApi: true, tags: ['Internal', 'Vision', 'Claude'] },
+    { id: 103, name: 'YouTube Summarizer', category: 'AI Assistant', link: '#youtube-summarizer', description: 'Get structured AI summaries and insights from any public YouTube video link.', icon: '▶️', free: true, hasApi: true, tags: ['Internal', 'YouTube', 'Summary'] },
+
     // --- Text-to-Video ---
     { id: 1, name: 'Pika', category: 'Text-to-Video', link: 'https://pika.art', description: 'Cinematic clips from text prompts with free tier', icon: '🎬', free: true, hasApi: false, tags: ['Video', 'Cinematic', 'Free Tier'] },
     { id: 2, name: 'Runway Gen-2', category: 'Text-to-Video', link: 'https://runwayml.com', description: 'Studio-grade video generation with free credits on signup', icon: '🎥', free: true, hasApi: true, tags: ['Video', 'Studio', 'Credits'] },

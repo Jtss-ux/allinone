@@ -5,24 +5,23 @@ import axios from 'axios';
 import { backendApi } from '@/config/api';
 
 export default function ImageUpscaler() {
-  const [image, setImage] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
-  const [scale, setScale] = useState(2);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setPreview(URL.createObjectURL(selectedFile));
     }
   };
 
   const handleUpscale = async () => {
-    if (!image) {
-      setError('Please upload an image');
+    if (!file) {
+      setError('Please select an image file');
       return;
     }
 
@@ -30,15 +29,14 @@ export default function ImageUpscaler() {
     setError('');
     setResult(null);
 
-    try {
-      // Use img2img with upscaling prompt
-      const formData = new FormData();
-      formData.append('image', image);
-      formData.append('prompt', 'high quality, detailed, sharp, high resolution, enhanced');
-      formData.append('strength', '0.3');
+    const formData = new FormData();
+    formData.append('image', file);
 
-      const response = await axios.post(backendApi('/api/image/img2img'), formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+    try {
+      const response = await axios.post(backendApi('/api/image/upscale'), formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
       setResult(response.data);
     } catch (err: any) {
@@ -50,71 +48,75 @@ export default function ImageUpscaler() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-800 rounded-lg p-8">
-        <h3 className="text-xl font-semibold mb-4">Image Upscaler</h3>
-        
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Upload Image to Upscale</label>
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={handleImageChange}
-            className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600"
-          />
-        </div>
+      <div className="bg-gray-800 rounded-lg p-8 shadow-xl border border-gray-700">
+        <h3 className="text-2xl font-bold mb-6 text-white flex items-center">
+          <span className="mr-2">📈</span> 4K Image Upscaler
+        </h3>
 
-        {preview && (
-          <div className="mb-4">
-            <p className="text-sm text-gray-400 mb-2">Original:</p>
-            <img src={preview} alt="Preview" className="w-48 h-48 object-contain rounded-lg border border-gray-600" />
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-3 text-gray-300">Select Image to Enhance</label>
+          <div className="flex items-center justify-center w-full">
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900/50 hover:bg-gray-700 transition-all group">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-600/20 transition-colors">
+                  <span className="text-2xl">📁</span>
+                </div>
+                <p className="mb-2 text-sm text-gray-300">
+                  <span className="font-bold text-blue-400">Click to upload</span> or drag and drop
+                </p>
+                <p className="text-xs text-gray-500 uppercase tracking-widest">Aura-SR Neural Engine</p>
+              </div>
+              <input type="file" className="hidden" onChange={handleFileChange} accept="image/*" />
+            </label>
           </div>
-        )}
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Upscale Factor: {scale}x</label>
-          <input
-            type="range"
-            min="2"
-            max="4"
-            step="1"
-            value={scale}
-            onChange={(e) => setScale(Number(e.target.value))}
-            className="w-full"
-          />
+          {preview && (
+            <div className="mt-6 p-4 bg-black/30 rounded-lg border border-gray-700">
+              <p className="text-xs font-bold text-gray-500 uppercase mb-3 px-1">Source Preview</p>
+              <img src={preview} alt="Source" className="max-h-64 mx-auto rounded-lg shadow-2xl" />
+              <p className="text-center text-xs text-gray-500 mt-2">{file?.name} ({Math.round(file!.size / 1024 / 1024 * 100) / 100}MB)</p>
+            </div>
+          )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-900 text-red-100 rounded-lg text-sm">{error}</div>
+          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 text-red-100 rounded-lg text-sm">
+            {error}
+          </div>
         )}
 
         <button
           onClick={handleUpscale}
-          disabled={loading}
-          className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition disabled:opacity-50"
+          disabled={loading || !file}
+          className="w-full px-4 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-xl font-bold text-white transition-all transform hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
         >
-          {loading ? '📈 Upscaling...' : 'Upscale Image'}
+          {loading ? (
+            <span className="flex items-center justify-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Processing 4K Neural Upscale...
+            </span>
+          ) : 'Upscale to 4K Ultra HD'}
         </button>
 
-        {result && result.success && result.imageBase64 && (
-          <div className="mt-6">
-            <h4 className="font-semibold mb-2">✅ Upscaled Image</h4>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <p className="text-sm text-gray-400 mb-2">Original</p>
-                <img src={preview} alt="Original" className="w-full rounded-lg border border-gray-600" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-400 mb-2">Upscaled ({scale}x)</p>
-                <img src={result.imageBase64} alt="Upscaled" className="w-full rounded-lg border border-gray-600" />
-              </div>
+        {result?.imageUrl && (
+          <div className="mt-10 animate-in fade-in slide-in-from-bottom-4">
+            <h4 className="font-bold mb-4 text-center text-green-400 flex items-center justify-center">
+              <span className="mr-2">✨</span> 4K Enhancement Complete
+            </h4>
+            <div className="rounded-xl overflow-hidden border-2 border-blue-500/30 shadow-2xl ring-4 ring-blue-500/10">
+              <img src={result.imageUrl} alt="Upscaled" className="w-full h-auto" />
             </div>
-            <a
-              href={result.imageBase64}
-              download={`ai-upscaled-${result.jobId}.png`}
-              className="inline-block w-full mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-center transition"
-            >
-              ⬇️ Download Upscaled Image
-            </a>
+            <div className="mt-6 flex justify-center gap-4">
+              <a
+                href={result.imageUrl}
+                download="ghelper_upscaled_4k.png"
+                className="px-8 py-3 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-bold shadow-lg transition transform hover:translate-y-[-2px] active:translate-y-0"
+              >
+                Download 4K Image
+              </a>
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-4 italic">
+              Processed via Fal.ai Aura-SR Engine
+            </p>
           </div>
         )}
       </div>

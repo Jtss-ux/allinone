@@ -168,6 +168,11 @@ export default function TetrisGame() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent scrolling for game keys
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
+
       if (gameOver) return;
       switch (e.key) {
         case 'ArrowLeft':
@@ -290,7 +295,7 @@ export default function TetrisGame() {
               height={BOARD_HEIGHT * CELL_SIZE}
               className="border-4 border-gray-600 rounded-lg"
             />
-            
+
             {(gameOver || isPaused) && (
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 rounded-lg">
                 <div className="text-center">
