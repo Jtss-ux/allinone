@@ -1049,7 +1049,7 @@ app.get('/api/breach/check', async (req, res) => {
     const { term } = req.query;
     if (!term) return res.status(400).json({ error: 'Term is required' });
 
-    const response = await axios.get(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(term as string)}`, {
+    const response = await axios.get(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(term)}`, {
       headers: {
         'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || '860a1877d0msh868e8bfdc0680aep189561jsn8221ee460831',
         'X-RapidAPI-Host': 'breachdirectory.p.rapidapi.com'
