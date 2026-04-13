@@ -24,7 +24,7 @@ jobs:
     steps:
     - name: Ping Backend
       run: |
-        curl -s https://your-backend.onrender.com/api/health > /dev/null
+        curl -s https://ai-studio-backend-ffjl.onrender.com/api/health > /dev/null
         echo "Backend pinged successfully"
     
     # Run every 10 minutes
