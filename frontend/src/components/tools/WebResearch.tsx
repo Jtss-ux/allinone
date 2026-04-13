@@ -45,7 +45,6 @@ export default function WebResearch() {
   };
 
   return (
-  return (
     <div className="max-w-5xl tv:max-w-[1600px] mx-auto space-y-6">
       <div className="bg-gray-800/80 backdrop-blur border border-gray-700/50 rounded-2xl overflow-hidden shadow-2xl">
         {/* Header */}
