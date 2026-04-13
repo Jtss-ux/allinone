@@ -17,6 +17,7 @@ const PORT = process.env.PORT || process.env.REPLIT_DEV_PORT || 5000;
 const imageRoutes = require('./src/routes/imageRoutes');
 const providerStatusRoutes = require('./src/routes/providerStatus');
 const { YoutubeTranscript } = require('youtube-transcript');
+const FirecrawlApp = require('@mendable/firecrawl-js').default;
 
 // CORS configuration - Allow all origins for now (you can restrict this later)
 const corsOptions = {
@@ -637,6 +638,45 @@ app.post('/api/translate', upload.none(), async (req, res) => {
   } catch (error) {
     console.error('Translation error:', error.message);
     res.status(500).json({ error: 'Failed to translate', message: error.message });
+  }
+});
+
+// Web Research/Scraping — powered by Firecrawl
+app.post('/api/web/research', upload.none(), async (req, res) => {
+  try {
+    const { query, mode = 'scrape', url } = req.body;
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+
+    if (!apiKey) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Firecrawl API key is not configured.' 
+      });
+    }
+
+    const firecrawl = new FirecrawlApp({ apiKey });
+
+    if (mode === 'search') {
+      if (!query) return res.status(400).json({ error: 'Search query is required' });
+      const response = await firecrawl.search(query, {
+        limit: 5,
+        scrapeOptions: { formats: ['markdown'] }
+      });
+      return res.json({ success: true, data: response.data, provider: 'firecrawl-search' });
+    }
+
+    if (mode === 'scrape') {
+      if (!url) return res.status(400).json({ error: 'URL is required for scraping' });
+      const response = await firecrawl.scrapeUrl(url, {
+        formats: ['markdown']
+      });
+      return res.json({ success: true, data: response.data, provider: 'firecrawl-scrape' });
+    }
+
+    res.status(400).json({ error: 'Invalid research mode' });
+  } catch (error) {
+    console.error('Web research error:', error.message);
+    res.status(500).json({ error: 'Failed to perform web research', message: error.message });
   }
 });
 

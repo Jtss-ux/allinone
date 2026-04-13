@@ -134,6 +134,12 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
       ],
     },
     {
+      category: 'RESEARCH',
+      tools: [
+        { id: 'web-research', label: 'Web Researcher', icon: <Globe className="w-5 h-5" /> },
+      ],
+    },
+    {
       category: 'AI DIRECTORY',
       tools: [
         { id: 'awesome-llm-apps', label: 'Awesome LLM Apps', icon: <Layers className="w-5 h-5" /> },

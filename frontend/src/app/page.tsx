@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
@@ -10,7 +10,18 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    setBackendStatus(true);
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(backendApi('/api/health'));
+        setBackendStatus(response.ok);
+      } catch (err) {
+        setBackendStatus(false);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000); // Check every 30s
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -65,7 +76,9 @@ export default function Home() {
           </div>
           <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 rounded-lg border border-gray-700 text-xs sm:text-sm">
             <span className="text-gray-400">Backend: </span>
-            <span className="font-semibold text-green-500">● Running</span>
+            <span className={`font-semibold ${backendStatus ? 'text-green-500' : 'text-red-500'}`}>
+              ● {backendStatus ? 'Running' : 'Disconnected'}
+            </span>
           </div>
         </div>
 

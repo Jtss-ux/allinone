@@ -84,6 +84,7 @@ import SocialPostGenerator from './tools/SocialPostGenerator';
 import ResumeBuilder from './tools/ResumeBuilder';
 import ImageAnalyzer from './tools/ImageAnalyzer';
 import YouTubeSummarizer from './tools/YouTubeSummarizer';
+import WebResearch from './tools/WebResearch';
 
 interface DashboardProps {
   section: string;
@@ -97,6 +98,8 @@ export default function Dashboard({ section, backendStatus, onSectionChange }: D
       // Main Hub
       case 'photo-effects':
         return <PhotoEffects />;
+      case 'web-research':
+        return <WebResearch />;
       case 'photo-editor':
         return <PhotoEditor />;
       case 'meme-generator':
