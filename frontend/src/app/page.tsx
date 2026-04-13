@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Dashboard from '@/components/Dashboard';
+import { backendApi } from '@/config/api';
 
 export default function Home() {
   const [currentSection, setCurrentSection] = useState('image-generator');

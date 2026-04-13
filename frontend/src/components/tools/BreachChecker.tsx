@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { backendApi } from '@/config/api';
 
 export default function BreachChecker() {
     const [input, setInput] = useState('');

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 import { Toaster } from 'react-hot-toast'
 import Providers from '@/components/Providers'
 import { CSPostHogProvider } from '@/components/PostHogProvider'
+import { Analytics } from "@vercel/analytics/next"
 
 export default function RootLayout({
   children,
@@ -22,6 +23,7 @@ export default function RootLayout({
           <Providers>
             {children}
             <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+            <Analytics />
           </Providers>
         </CSPostHogProvider>
       </body>
