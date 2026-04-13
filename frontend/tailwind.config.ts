@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        'xs': '480px',
+        'tv': '2000px',
+      },
       colors: {
         primary: '#10b981',
         secondary: '#1f2937',

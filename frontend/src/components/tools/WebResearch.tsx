@@ -45,8 +45,9 @@ export default function WebResearch() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="bg-gray-800 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl">
+  return (
+    <div className="max-w-5xl tv:max-w-[1600px] mx-auto space-y-6">
+      <div className="bg-gray-800/80 backdrop-blur border border-gray-700/50 rounded-2xl overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6">
           <div className="flex items-center gap-4">

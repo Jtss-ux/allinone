@@ -279,41 +279,42 @@ export default function Dashboard({ section, backendStatus, onSectionChange }: D
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-gray-950 border-b border-gray-800 p-6 flex justify-between items-start">
+      <div className="bg-gray-950 border-b border-gray-800 p-4 xs:p-6 sm:p-8 tv:p-12 flex flex-col sm:flex-row justify-between items-start gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-white capitalize">{section.replace(/-/g, ' ')}</h2>
-          <p className="text-gray-400 mt-1">
-            {backendStatus ? '✅ Backend Connected' : '❌ Backend Disconnected'}
+          <h2 className="text-2xl xs:text-3xl sm:text-4xl tv:text-6xl font-black text-white capitalize tracking-tight">{section.replace(/-/g, ' ')}</h2>
+          <p className="text-gray-400 mt-1 text-sm xs:text-base tv:text-2xl">
+            {backendStatus ? '✅ Systems Protocol: Online' : '❌ Target Unreachable: Offline'}
           </p>
         </div>
-        <div className="flex gap-3 text-xs font-mono">
-          <div className="bg-gray-900 border border-gray-800 px-3 py-2 rounded-lg flex flex-col gap-1 min-w-[140px]">
+        <div className="flex flex-wrap gap-3 text-[10px] xs:text-xs tv:text-lg font-mono w-full sm:w-auto">
+          <div className="bg-gray-900/50 backdrop-blur border border-gray-800 px-3 py-2 tv:px-6 tv:py-4 rounded-xl flex flex-col gap-1 min-w-[130px] tv:min-w-[220px]">
             <div className="flex justify-between gap-2">
-              <span className="text-gray-400">ML Service:</span>
-              <span className="text-green-400">● Running</span>
+              <span className="text-gray-500 uppercase tracking-tighter">AI Node:</span>
+              <span className="text-green-500 font-bold">● Active</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-gray-400">Backend:</span>
-              <span className={backendStatus ? "text-green-400" : "text-red-400"}>
-                ● {backendStatus ? 'Running' : 'Offline'}
+              <span className="text-gray-500 uppercase tracking-tighter">Core:</span>
+              <span className={backendStatus ? "text-green-500 font-bold" : "text-red-500 font-bold"}>
+                ● {backendStatus ? 'Synced' : 'Error'}
               </span>
             </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 px-3 py-2 rounded-lg flex flex-col gap-1 min-w-[140px]">
+          <div className="bg-gray-900/50 backdrop-blur border border-gray-800 px-3 py-2 tv:px-6 tv:py-4 rounded-xl flex flex-col gap-1 min-w-[130px] tv:min-w-[220px]">
             <div className="flex justify-between gap-2">
-              <span className="text-gray-400">Device:</span>
-              <span className="text-blue-400">CPU Mode</span>
+              <span className="text-gray-500 uppercase tracking-tighter">Mode:</span>
+              <span className="text-blue-500 font-bold">Standard</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-gray-400">Models:</span>
-              <span className="text-purple-400">Loaded</span>
+              <span className="text-gray-500 uppercase tracking-tighter">Assets:</span>
+              <span className="text-purple-500 font-bold">Cached</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8 bg-gray-900">
+      <div className="flex-1 overflow-auto p-4 xs:p-6 sm:p-8 lg:p-12 tv:p-24 bg-gray-900">
+        <div className="max-w-[1400px] tv:max-w-[2400px] mx-auto h-full">
         <AnimatePresence mode="wait">
           <motion.div
             key={section}
@@ -326,6 +327,7 @@ export default function Dashboard({ section, backendStatus, onSectionChange }: D
             {renderTool()}
           </motion.div>
         </AnimatePresence>
+        </div>
       </div>
     </div>
   );

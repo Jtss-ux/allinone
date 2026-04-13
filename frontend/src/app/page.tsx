@@ -70,15 +70,15 @@ export default function Home() {
           <div className="w-10" />
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 p-2 sm:p-4 bg-gray-950 border-b border-gray-800">
-          <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 rounded-lg border border-gray-700 text-xs sm:text-sm">
-            <span className="text-gray-400">ML: </span>
-            <span className="text-green-500 font-semibold">● Running</span>
+        <div className="flex flex-wrap gap-2 sm:gap-4 p-3 sm:p-4 bg-gray-950 border-b border-gray-800 items-center">
+          <div className="px-3 py-2 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest">ML: Running</span>
           </div>
-          <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 rounded-lg border border-gray-700 text-xs sm:text-sm">
-            <span className="text-gray-400">Backend: </span>
-            <span className={`font-semibold ${backendStatus ? 'text-green-500' : 'text-red-500'}`}>
-              ● {backendStatus ? 'Running' : 'Disconnected'}
+          <div className="px-3 py-2 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${backendStatus ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest">
+              Backend: {backendStatus ? 'Online' : 'Disconnected'}
             </span>
           </div>
         </div>

@@ -51,8 +51,8 @@ export default function ImageGenerator() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-800 rounded-lg p-8">
+    <div className="max-w-3xl tv:max-w-5xl mx-auto">
+      <div className="bg-gray-800/80 backdrop-blur border border-gray-700/50 rounded-2xl p-4 xs:p-6 sm:p-8 tv:p-12 shadow-2xl">
         <h3 className="text-xl font-semibold mb-4">Generate an Image</h3>
 
         <div className="mb-4">

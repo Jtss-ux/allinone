@@ -158,7 +158,7 @@ export default function Sidebar({ currentSection, onSectionChange }: SidebarProp
     .filter(section => section.tools.length > 0);
 
   return (
-    <div className="w-64 bg-gray-950 border-r border-gray-800 flex flex-col h-full">
+    <div className="w-64 xl:w-72 tv:w-96 bg-gray-950 border-r border-gray-800 flex flex-col h-full">
       <div className="p-6 border-b border-gray-900">
         <h1 className="text-2xl font-bold text-green-500">AI Studio</h1>
         <p className="text-gray-400 text-sm mt-1">Create with AI</p>
